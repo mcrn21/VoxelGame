@@ -1,0 +1,20 @@
+# CMake user
+CMakeLists.txt.user
+
+# Makefiles
+Makefile
+Makefile.*
+
+# qtcreator autosave files
+*.autosave
+
+# Object-files
+*.o
+
+# Files, needed by apps at runtime
+*.lock
+*.pid
+*.log
+*.conf
+
+build/
