@@ -15,8 +15,6 @@ public:
         : m_camera_cam_x{0.0f}
         , m_camera_cam_y{0.0f}
         , m_camera_speed{20.0f}
-        , m_chunk{{0, 0, 0}, {16, 16, 16}, 16.0f, 16.0f}
-        , m_chunks{{6, 1, 6}, {16, 16, 16}, 1.0f, 16.0f, this}
         , m_target_block_visible{false}
     {}
     ~EngineImpl() = default;
@@ -74,23 +72,12 @@ protected:
             exit();
         }
 
-        auto &chunks_size = m_chunks.getChunksSize();
-        auto &chunk_size = m_chunks.getChunkSize();
-        float voxel_size = m_chunks.getVoxelSize();
-        m_chunks_mesh.resize(chunks_size.y * chunks_size.x * chunks_size.z);
-
-        int32_t i = 0;
-        for (int32_t y = 0; y < chunks_size.y; ++y) {
-            for (int32_t z = 0; z < chunks_size.z; ++z) {
-                for (int32_t x = 0; x < chunks_size.x; ++x) {
-                    m_chunks_mesh[i] = std::make_unique<eb::ChunkMesh>(this, m_atlas);
-                    m_chunks_mesh[i]->create(&m_chunks, {x, y, z});
-                    m_chunks_mesh[i]->setPosition(glm::vec3{x, y, z} * glm::vec3{chunk_size}
-                                                  * voxel_size);
-                    ++i;
-                }
-            }
-        }
+        m_chunks = std::make_unique<eb::Chunks>(glm::i32vec3{4, 1, 4},
+                                                glm::i32vec3{16, 32, 16},
+                                                1.0f,
+                                                16.0f,
+                                                m_atlas,
+                                                this);
 
         m_target_texture = std::make_shared<eb::Texture>();
         if (!m_target_texture->loadFromFile("target.png")) {
@@ -101,9 +88,6 @@ protected:
         m_target_sprite = std::make_unique<eb::Sprite>(this);
         m_target_sprite->setTexture(m_target_texture);
         m_target_sprite->setDrawType(eb::Sprite::DRAW_2D);
-        // m_target_sprite->setShader(&eb::Shader::getDefault2D());
-        // m_target_sprite->setScale({0.005f, 0.005f, 0.005f});
-        // m_target_sprite->setScale({0.05f, 0.05f, 0.05f});
         m_target_sprite->setOrigin({m_target_sprite->getTextureRect().z / 2,
                                     m_target_sprite->getTextureRect().w / 2,
                                     0.0f});
@@ -115,6 +99,95 @@ protected:
                              {1.005f, 1.005f, 1.005f},
                              glm::vec4{0.0f, 0.0f, 0.0f, 0.7f});
         m_target_block->setLineWidth(3.0f);
+
+        // Light
+        m_r_solver = std::make_unique<eb::LightSolver>(m_chunks.get(), 0);
+        m_g_solver = std::make_unique<eb::LightSolver>(m_chunks.get(), 1);
+        m_b_solver = std::make_unique<eb::LightSolver>(m_chunks.get(), 2);
+        m_s_solver = std::make_unique<eb::LightSolver>(m_chunks.get(), 3);
+
+        m_chunks->forEachVoxels(
+            [this](const glm::i32vec3 &voxel_coords_in_chunk, const glm::i32vec3 &voxel_coords) {
+                auto *voxel = m_chunks->getVoxel(voxel_coords);
+                if (voxel->id == 3) {
+                    m_r_solver->add(voxel_coords, 15);
+                    m_g_solver->add(voxel_coords, 15);
+                    m_b_solver->add(voxel_coords, 15);
+                }
+            });
+
+        glm::i32vec3 voxels_size = m_chunks->getChunkSize() * m_chunks->getChunksSize();
+        glm::i32vec3 voxel_coords;
+        for (voxel_coords.z = 0; voxel_coords.z < voxels_size.z; ++voxel_coords.z) {
+            for (voxel_coords.x = 0; voxel_coords.x < voxels_size.x; ++voxel_coords.x) {
+                for (voxel_coords.y = voxels_size.y - 1; voxel_coords.y >= 0; --voxel_coords.y) {
+                    auto *voxel = m_chunks->getVoxel(voxel_coords);
+                    if (voxel->id != 0)
+                        break;
+
+                    m_chunks->getChunkByVoxel(voxel_coords)
+                        ->getLightmap()
+                        .setS(voxel_coords % m_chunks->getChunkSize(), 0xF);
+                }
+            }
+        }
+
+        for (voxel_coords.z = 0; voxel_coords.z < voxels_size.z; ++voxel_coords.z) {
+            for (voxel_coords.x = 0; voxel_coords.x < voxels_size.x; ++voxel_coords.x) {
+                for (voxel_coords.y = voxels_size.y - 1; voxel_coords.y >= 0; --voxel_coords.y) {
+                    auto *voxel = m_chunks->getVoxel(voxel_coords);
+                    if (voxel->id != 0)
+                        break;
+
+                    if (m_chunks->getLight(voxel_coords + glm::i32vec3{-1, 0, 0}, 3) == 0
+                        || m_chunks->getLight(voxel_coords + glm::i32vec3{1, 0, 0}, 3) == 0
+                        || m_chunks->getLight(voxel_coords + glm::i32vec3{0, -1, 0}, 3) == 0
+                        || m_chunks->getLight(voxel_coords + glm::i32vec3{0, 1, 0}, 3) == 0
+                        || m_chunks->getLight(voxel_coords + glm::i32vec3{0, 0, -1}, 3) == 0
+                        || m_chunks->getLight(voxel_coords + glm::i32vec3{0, 0, 1}, 3) == 0) {
+                        m_s_solver->add(voxel_coords);
+                    }
+
+                    m_chunks->getChunkByVoxel(voxel_coords)
+                        ->getLightmap()
+                        .setS(voxel_coords % m_chunks->getChunkSize(), 0xF);
+                }
+            }
+        }
+
+        m_r_solver->solve();
+        m_g_solver->solve();
+        m_b_solver->solve();
+        m_s_solver->solve();
+
+        std::vector<eb::MeshVertex> mesh_verticies = {{{0, 0, 0}},
+                                                      {{10, 0, 0}},
+                                                      {{10, 10, 0}},
+                                                      {{0, 10, 0}}};
+
+        std::vector<uint32_t> mesh_indices = {0, 1, 3, 1, 2, 3};
+
+        m_test_mesh = std::make_unique<eb::Mesh>(mesh_verticies,
+                                                 mesh_indices,
+                                                 std::vector<std::shared_ptr<eb::Texture>>{});
+
+        // Model
+        m_test_model = std::make_unique<eb::Model>();
+        m_test_model->loadFromFile("model/airpods_girl/scene.gltf");
+        m_test_model->setScale({1.1f, 1.1f, 1.1f});
+        m_test_model->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
+        m_test_model->setPosition({0.0f, 20.0f, 0.0f});
+
+        m_test_model2 = std::make_unique<eb::Model>();
+
+        m_test_model2->loadFromFile(
+            "model/volumen-pequeno-final-daniela-romar-taz/source/Shrek Final.fbx");
+
+        m_test_model2->setScale({10.3f, 10.3f, 10.3f});
+        m_test_model2->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
+        m_test_model2->setPosition({40.0f, 40.0f, 0.0f});
+
+        spdlog::info("OK");
     }
 
     void onProcessInput(const eb::Time &elapsed)
@@ -173,27 +246,93 @@ protected:
             glm::vec3 end;
             glm::vec3 norm;
             glm::vec3 iend;
-            const eb::Voxel *voxel = m_chunks.rayCast(camera->getPosition(),
-                                                      camera->getFront(),
-                                                      10.0f,
-                                                      end,
-                                                      norm,
-                                                      iend);
+            const eb::Voxel *voxel = m_chunks->rayCast(camera->getPosition(),
+                                                       camera->getFront(),
+                                                       10.0f,
+                                                       end,
+                                                       norm,
+                                                       iend);
 
             if (voxel) {
                 m_target_block_visible = true;
                 m_target_block->setPosition(iend);
 
                 if (mouse.isButtonJustPressed(GLFW_MOUSE_BUTTON_1)) {
-                    m_chunks.setVoxelByGlobal(iend, 0);
-                    m_chunks_mesh[m_chunks.getChunkIndexByGlobal(static_cast<glm::i32vec3>(iend))]
-                        ->create(&m_chunks, m_chunks.getChunkCoordsByGlobal(iend));
+                    m_chunks->setVoxelByGlobal(iend, eb::Voxel{0});
+
+                    glm::i32vec3 voxel_coords = iend / m_chunks->getVoxelSize();
+
+                    m_r_solver->remove(voxel_coords);
+                    m_g_solver->remove(voxel_coords);
+                    m_b_solver->remove(voxel_coords);
+
+                    m_r_solver->solve();
+                    m_g_solver->solve();
+                    m_b_solver->solve();
+
+                    if (m_chunks->getLight(voxel_coords + glm::i32vec3{0, 1, 0}, 3) == 0xF) {
+                        for (int32_t i = voxel_coords.y; i >= 0; i--) {
+                            if (m_chunks->getVoxel(glm::i32vec3{voxel_coords.x, i, voxel_coords.z})->id
+                                != 0)
+                                break;
+                            m_s_solver->add(glm::i32vec3{voxel_coords.x, i, voxel_coords.z}, 0xF);
+                        }
+                    }
+
+                    static const std::vector<glm::i32vec3> neighbors = {glm::i32vec3{0, 0, 1},
+                                                                        glm::i32vec3{0, 0, -1},
+                                                                        glm::i32vec3{0, 1, 0},
+                                                                        glm::i32vec3{0, -1, 0},
+                                                                        glm::i32vec3{1, 0, 0},
+                                                                        glm::i32vec3{-1, 0, 0}};
+
+                    for (const auto &n : neighbors) {
+                        m_r_solver->add(voxel_coords + n);
+                        m_g_solver->add(voxel_coords + n);
+                        m_b_solver->add(voxel_coords + n);
+                        m_s_solver->add(voxel_coords + n);
+                    }
+
+                    m_r_solver->solve();
+                    m_g_solver->solve();
+                    m_b_solver->solve();
+                    m_s_solver->solve();
                 }
 
                 if (mouse.isButtonJustPressed(GLFW_MOUSE_BUTTON_2)) {
-                    m_chunks.setVoxelByGlobal(iend + norm, 2);
-                    m_chunks_mesh[m_chunks.getChunkIndexByGlobal(static_cast<glm::i32vec3>(iend))]
-                        ->create(&m_chunks, m_chunks.getChunkCoordsByGlobal(iend));
+                    int32_t id = 3;
+
+                    m_chunks->setVoxelByGlobal(iend + norm, eb::Voxel{id});
+
+                    glm::i32vec3 voxel_coords = (iend + norm) / m_chunks->getVoxelSize();
+
+                    m_r_solver->remove(voxel_coords);
+                    m_g_solver->remove(voxel_coords);
+                    m_b_solver->remove(voxel_coords);
+                    m_s_solver->remove(voxel_coords);
+
+                    for (int32_t i = voxel_coords.y - 1; i >= 0; i--) {
+                        m_s_solver->remove(glm::i32vec3{voxel_coords.x, i, voxel_coords.z});
+                        if (i == 0
+                            || m_chunks->getVoxel(glm::i32vec3{voxel_coords.x, i, voxel_coords.z})->id
+                                   != 0) {
+                            break;
+                        }
+                    }
+                    m_r_solver->solve();
+                    m_g_solver->solve();
+                    m_b_solver->solve();
+                    m_s_solver->solve();
+
+                    if (id == 3) {
+                        m_r_solver->add(voxel_coords, 15);
+                        m_g_solver->add(voxel_coords, 15);
+                        m_b_solver->add(voxel_coords, 15);
+
+                        m_r_solver->solve();
+                        m_g_solver->solve();
+                        m_b_solver->solve();
+                    }
                 }
             }
         }
@@ -208,6 +347,8 @@ protected:
         m_sprite2->rotate(glm::vec3{glm::radians(0.0f),
                                     glm::radians(0.0f),
                                     glm::radians(elapsed.asSeconds() * 20)});
+
+        m_chunks->update();
     }
 
     void onDraw(const eb::Time &elapsed)
@@ -215,12 +356,18 @@ protected:
         // getWindow().draw(*m_sprite1);
         getWindow().draw(*m_sprite2);
 
-        for (const auto &mesh : m_chunks_mesh) {
-            getWindow().draw(*mesh);
-        }
+        // for (const auto &mesh : m_chunks_mesh) {
+        //     getWindow().draw(*mesh);
+        // }
+
+        m_chunks->draw(getWindow());
 
         if (m_target_block_visible)
             getWindow().draw(*m_target_block);
+
+        // getWindow().draw(*m_test_mesh);
+        getWindow().draw(*m_test_model);
+        getWindow().draw(*m_test_model2);
 
         getWindow().draw(*m_target_sprite);
 
@@ -240,18 +387,24 @@ private:
     float m_camera_cam_y;
     float m_camera_speed;
 
-    eb::Chunk m_chunk;
     std::shared_ptr<eb::Texture> m_atlas;
-    std::unique_ptr<eb::ChunkMesh> m_chunk_mesh;
-
-    eb::Chunks m_chunks;
-    std::vector<std::unique_ptr<eb::ChunkMesh>> m_chunks_mesh;
+    std::unique_ptr<eb::Chunks> m_chunks;
 
     std::shared_ptr<eb::Texture> m_target_texture;
     std::unique_ptr<eb::Sprite> m_target_sprite;
 
     std::unique_ptr<eb::LinesBatch> m_target_block;
     bool m_target_block_visible;
+
+    std::unique_ptr<eb::LightSolver> m_r_solver;
+    std::unique_ptr<eb::LightSolver> m_g_solver;
+    std::unique_ptr<eb::LightSolver> m_b_solver;
+    std::unique_ptr<eb::LightSolver> m_s_solver;
+
+    std::unique_ptr<eb::Mesh> m_test_mesh;
+    std::unique_ptr<eb::Model> m_test_model;
+
+    std::unique_ptr<eb::Model> m_test_model2;
 };
 
 int main()

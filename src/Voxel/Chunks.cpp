@@ -1,5 +1,6 @@
 #include "Chunks.h"
 
+#include <glm/gtc/noise.hpp>
 #include <spdlog/spdlog.h>
 
 namespace eb {
@@ -8,27 +9,41 @@ Chunks::Chunks(const glm::i32vec3 &chunks_size,
                const glm::i32vec3 &chunk_size,
                float voxel_size,
                float texture_size,
+               const std::shared_ptr<Texture> &atlas_texture,
                Engine *engine)
     : EngineObject{engine}
     , m_chunks_size{chunks_size}
     , m_chunk_size{chunk_size}
     , m_voxel_size{voxel_size}
     , m_texture_size{texture_size}
+    , m_atlas_texture{atlas_texture}
+    , m_chunks_modfied{false}
 {
-    m_chunks.resize(m_chunks_size.x * m_chunks_size.y * m_chunks_size.z);
-    m_meshes.resize(m_chunks_size.x * m_chunks_size.y * m_chunks_size.z);
+    m_chunk_states.resize(m_chunks_size.x * m_chunks_size.y * m_chunks_size.z);
+
+    // Create chunks
+    for (int32_t y = 0; y < m_chunks_size.y; ++y) {
+        for (int32_t z = 0; z < m_chunks_size.z; ++z) {
+            for (int32_t x = 0; x < m_chunks_size.x; ++x) {
+                glm::i32vec3 chunk_coords = {x, y, z};
+
+                auto chunk_state = std::make_unique<ChunkState>(chunk_coords,
+                                                                this,
+                                                                atlas_texture,
+                                                                engine);
+                chunk_state->mesh->setPosition(static_cast<glm::vec3>(chunk_coords)
+                                               * static_cast<glm::vec3>(chunk_size) * voxel_size);
+
+                m_chunk_states[chunkCoordsToIndex({x, y, z})] = std::move(chunk_state);
+            }
+        }
+    }
 
     for (int32_t y = 0; y < m_chunks_size.y; ++y) {
         for (int32_t z = 0; z < m_chunks_size.z; ++z) {
             for (int32_t x = 0; x < m_chunks_size.x; ++x) {
-                auto chunk = std::make_unique<Chunk>(glm::i32vec3{x, y, z},
-                                                     chunk_size,
-                                                     voxel_size,
-                                                     texture_size);
-                m_chunks[(y * m_chunks_size.z + z) * m_chunks_size.x + x] = std::move(chunk);
-
-                auto mesh = std::make_unique<ChunkMesh>(engine);
-                m_meshes[(y * m_chunks_size.z + z) * m_chunks_size.x + x] = std::move(mesh);
+                glm::i32vec3 chunk_coords = {x, y, z};
+                setChunkData(chunk_coords);
             }
         }
     }
@@ -54,76 +69,133 @@ float Chunks::getTextureSize() const
     return m_texture_size;
 }
 
-const Chunk *Chunks::getChunk(const glm::i32vec3 &index) const
+std::shared_ptr<Texture> Chunks::getAtlasTexture() const
 {
-    if (!containsChunk(index))
-        return nullptr;
-    return m_chunks[(index.y * m_chunks_size.z + index.z) * m_chunks_size.x + index.x].get();
+    return m_atlas_texture;
 }
 
-const Chunk *Chunks::getChunkByGlobal(const glm::vec3 &coords) const
+Chunk *Chunks::getChunk(const glm::i32vec3 &chunk_coords)
 {
-    return getChunk(static_cast<glm::i32vec3>(coords / m_voxel_size) / m_chunk_size);
-}
-
-const Voxel *Chunks::getVoxel(const glm::i32vec3 &index) const
-{
-    auto *chunk = getChunk(index / m_chunk_size);
-    if (!chunk)
-        return nullptr;
-    return chunk->getVoxel(index % m_chunk_size);
-}
-
-const Voxel *Chunks::getVoxelByGlobal(const glm::vec3 &coords) const
-{
-    return getVoxel(static_cast<glm::i32vec3>(coords / m_voxel_size));
-}
-
-void Chunks::setVoxel(const glm::i32vec3 &index, int32_t id)
-{
-    auto chunk_coords = index / m_chunk_size;
     if (!containsChunk(chunk_coords))
+        return nullptr;
+    return m_chunk_states[chunkCoordsToIndex(chunk_coords)]->chunk.get();
+}
+
+Chunk *Chunks::getChunkByVoxel(const glm::i32vec3 &voxel_coords)
+{
+    if (!containsVoxel(voxel_coords))
+        return nullptr;
+
+    auto chunk_coords = voxel_coords / m_chunk_size;
+    if (!containsChunk(chunk_coords))
+        return nullptr;
+
+    return m_chunk_states[chunkCoordsToIndex(chunk_coords)]->chunk.get();
+}
+
+Chunk *Chunks::getChunkByGlobal(const glm::vec3 &global_coords)
+{
+    return getChunkByVoxel(static_cast<glm::i32vec3>(global_coords / m_voxel_size));
+}
+
+const Voxel *Chunks::getVoxel(const glm::i32vec3 &voxel_coords) const
+{
+    if (!containsVoxel(voxel_coords))
+        return nullptr;
+    auto chunk_coords = voxel_coords / m_chunk_size;
+    return m_chunk_states[chunkCoordsToIndex(chunk_coords)]->chunk->getVoxel(voxel_coords
+                                                                             % m_chunk_size);
+}
+
+const Voxel *Chunks::getVoxelByGlobal(const glm::vec3 &global_coords) const
+{
+    return getVoxel(static_cast<glm::i32vec3>(global_coords / m_voxel_size));
+}
+
+void Chunks::setVoxel(const glm::i32vec3 &voxel_coords, const Voxel &voxel)
+{
+    if (!containsVoxel(voxel_coords))
         return;
-    m_chunks[(chunk_coords.y * m_chunks_size.z + chunk_coords.z) * m_chunks_size.x + chunk_coords.x]
-        ->setVoxel(index % m_chunk_size, id);
+
+    auto chunk_coords = voxel_coords / m_chunk_size;
+    auto local_voxel_coords = voxel_coords % m_chunk_size;
+
+    if (local_voxel_coords.x == 0 && containsChunk(chunk_coords + glm::i32vec3{-1, 0, 0})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{-1, 0, 0})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    if (local_voxel_coords.x == (m_chunk_size.x - 1)
+        && containsChunk(chunk_coords + glm::i32vec3{1, 0, 0})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{1, 0, 0})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    if (local_voxel_coords.y == 0 && containsChunk(chunk_coords + glm::i32vec3{0, -1, 0})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{0, -1, 0})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    if (local_voxel_coords.y == (m_chunk_size.y - 1)
+        && containsChunk(chunk_coords + glm::i32vec3{0, 1, 0})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{0, 1, 0})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    if (local_voxel_coords.z == 0 && containsChunk(chunk_coords + glm::i32vec3{0, 0, -1})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{0, 0, -1})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    if (local_voxel_coords.z == (m_chunk_size.z - 1)
+        && containsChunk(chunk_coords + glm::i32vec3{0, 0, 1})) {
+        m_chunk_states[chunkCoordsToIndex(chunk_coords + glm::i32vec3{0, 0, 1})]->chunk->m_modified
+            = true;
+        m_chunks_modfied = true;
+    }
+
+    m_chunk_states[chunkCoordsToIndex(chunk_coords)]->chunk->setVoxel(voxel_coords % m_chunk_size,
+                                                                      voxel);
 }
 
-void Chunks::setVoxelByGlobal(const glm::vec3 &coords, int32_t id)
+void Chunks::setVoxelByGlobal(const glm::vec3 &global_coords, const Voxel &voxel)
 {
-    setVoxel(static_cast<glm::i32vec3>(coords / m_voxel_size), id);
+    setVoxel(static_cast<glm::i32vec3>(global_coords / m_voxel_size), voxel);
 }
 
-bool Chunks::isBlocked(const glm::i32vec3 &index) const
+uint8_t Chunks::getLight(const glm::i32vec3 &voxel_coords, int32_t channel) const
 {
-    auto *voxel = getVoxel(index);
-    if (!voxel)
-        return false;
+    if (!containsVoxel(voxel_coords))
+        return 0;
 
-    return containsVoxel(index) && voxel->id != 0;
+    return m_chunk_states[chunkCoordsToIndex(voxel_coords / m_chunk_size)]
+        ->chunk->getLightmap()
+        .get(voxel_coords % m_chunk_size, channel);
 }
 
-bool Chunks::containsChunk(const glm::i32vec3 &index) const
+bool Chunks::isVoxelBlocked(const glm::i32vec3 &voxel_coords) const
 {
-    return index.x >= 0 && index.x < m_chunks_size.x && index.y >= 0 && index.y < m_chunks_size.y
-           && index.z >= 0 && index.z < m_chunks_size.z;
+    auto *voxel = getVoxel(voxel_coords);
+    return !voxel ? false : voxel->id != 0;
 }
 
-bool Chunks::containsVoxel(const glm::i32vec3 &index) const
+bool Chunks::containsChunk(const glm::i32vec3 &chunk_coords) const
 {
-    return index.x >= 0 && index.x < (m_chunk_size.x * m_chunks_size.x) && index.y >= 0
-           && index.y < (m_chunk_size.y * m_chunks_size.y) && index.z >= 0
-           && index.z < (m_chunk_size.z * m_chunks_size.z);
+    return chunk_coords.x >= 0 && chunk_coords.x < m_chunks_size.x && chunk_coords.y >= 0
+           && chunk_coords.y < m_chunks_size.y && chunk_coords.z >= 0
+           && chunk_coords.z < m_chunks_size.z;
 }
 
-glm::i32vec3 Chunks::getChunkCoordsByGlobal(const glm::vec3 &coords) const
+bool Chunks::containsVoxel(const glm::i32vec3 &voxel_coords) const
 {
-    return static_cast<glm::i32vec3>(coords / m_voxel_size) / m_chunk_size;
-}
-
-int32_t Chunks::getChunkIndexByGlobal(const glm::vec3 &coords) const
-{
-    auto chunk_coords = static_cast<glm::i32vec3>(coords / m_voxel_size) / m_chunk_size;
-    return (chunk_coords.y * m_chunks_size.z + chunk_coords.z) * m_chunks_size.x + chunk_coords.x;
+    return voxel_coords.x >= 0 && voxel_coords.x < (m_chunk_size.x * m_chunks_size.x)
+           && voxel_coords.y >= 0 && voxel_coords.y < (m_chunk_size.y * m_chunks_size.y)
+           && voxel_coords.z >= 0 && voxel_coords.z < (m_chunk_size.z * m_chunks_size.z);
 }
 
 const Voxel *Chunks::rayCast(glm::vec3 start,
@@ -228,6 +300,94 @@ const Voxel *Chunks::rayCast(glm::vec3 start,
     return nullptr;
 }
 
-void Chunks::forEach(const std::function<void(const Chunk *, const glm::i32vec3 &)> &func) const {}
+void Chunks::forEachVoxels(
+    const std::function<void(const glm::i32vec3 &, const glm::i32vec3 &)> &func) const
+{
+    if (!func)
+        return;
+
+    glm::i32vec3 voxel_coords{0};
+    for (voxel_coords.y = 0; voxel_coords.y < m_chunk_size.y * m_chunks_size.y; ++voxel_coords.y) {
+        for (voxel_coords.z = 0; voxel_coords.z < m_chunk_size.z * m_chunks_size.z;
+             ++voxel_coords.z) {
+            for (voxel_coords.x = 0; voxel_coords.x < m_chunk_size.x * m_chunks_size.x;
+                 ++voxel_coords.x) {
+                func(voxel_coords % m_chunk_size, voxel_coords);
+            }
+        }
+    }
+}
+
+void Chunks::forEachVoxelsInChunk(
+    const glm::i32vec3 &chunk_coords,
+    const std::function<void(const glm::i32vec3 &, const glm::i32vec3 &)> &func) const
+{
+    if (!containsChunk(chunk_coords) || !func)
+        return;
+
+    glm::i32vec3 voxel_offsets = chunk_coords * m_chunk_size;
+    glm::i32vec3 voxel_coords{0};
+    for (voxel_coords.y = 0; voxel_coords.y < m_chunk_size.y; ++voxel_coords.y) {
+        for (voxel_coords.z = 0; voxel_coords.z < m_chunk_size.z; ++voxel_coords.z) {
+            for (voxel_coords.x = 0; voxel_coords.x < m_chunk_size.x; ++voxel_coords.x) {
+                func(voxel_coords, voxel_offsets + voxel_coords);
+            }
+        }
+    }
+}
+
+void Chunks::update()
+{
+    if (m_chunks_modfied) {
+        m_chunks_modfied = false;
+        for (int32_t i = 0; i < m_chunk_states.size(); ++i) {
+            if (m_chunk_states[i]->chunk->m_modified == true) {
+                m_chunk_states[i]->chunk->m_modified = false;
+                m_chunk_states[i]->mesh->create(this, m_chunk_states[i]->chunk->getPosition());
+            }
+        }
+    }
+}
+
+void Chunks::draw(const RenderTarget &render_target) const
+{
+    for (const auto &chunk_state : m_chunk_states)
+        render_target.draw(*chunk_state->mesh);
+}
+
+int32_t Chunks::chunkCoordsToIndex(const glm::i32vec3 &chunk_coords) const
+{
+    return (chunk_coords.y * m_chunks_size.z + chunk_coords.z) * m_chunks_size.x + chunk_coords.x;
+}
+
+void Chunks::setChunkData(const glm::i32vec3 &chunk_coords)
+{
+    forEachVoxelsInChunk(chunk_coords,
+                         [this](const glm::i32vec3 &voxel_coords_in_chunk,
+                                const glm::i32vec3 &voxel_coords) {
+                             int32_t real_x = voxel_coords.x * m_chunk_size.x;
+                             int32_t real_z = voxel_coords.z * m_chunk_size.z;
+                             int32_t real_y = voxel_coords.y * m_chunk_size.y;
+
+                             // float height = (glm::perlin(
+                             //                     glm::vec2(real_x * 0.002625f, real_z * 0.00225f))
+                             //                 + 1.0f)
+                             //                * 0.6f;
+
+                             float height = (glm::perlin(glm::vec3{real_x * 0.005625f,
+                                                                   real_y * 0.009625f,
+                                                                   real_z * 0.00525f})
+                                             + 0.6f)
+                                            * 0.8f;
+
+                             int32_t id = (static_cast<float>(voxel_coords.y) / m_chunk_size.y)
+                                          < height;
+
+                             if (real_y <= 2)
+                                 id = 2;
+
+                             setVoxel(voxel_coords, Voxel{id});
+                         });
+}
 
 } // namespace eb

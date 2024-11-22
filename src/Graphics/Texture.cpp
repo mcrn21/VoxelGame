@@ -9,16 +9,66 @@
 
 namespace eb {
 
+struct TextureLoader
+{
+    TextureLoader(Texture *texture)
+        : texture{texture}
+    {}
+
+    bool loadFromFile(const std::filesystem::path &path) const
+    {
+        texture->destroy();
+
+        auto a_path = std::filesystem::absolute(path);
+        int32_t width, height, nr_components;
+
+        uint8_t *data = stbi_load(path.c_str(), &width, &height, &nr_components, 0);
+
+        if (!data)
+            return false;
+
+        GLenum format;
+        if (nr_components == 1)
+            format = GL_RED;
+        else if (nr_components == 3)
+            format = GL_RGB;
+        else if (nr_components == 4)
+            format = GL_RGBA;
+
+        glGenTextures(1, &texture->m_id);
+        glBindTexture(GL_TEXTURE_2D, texture->m_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        stbi_image_free(data);
+
+        texture->m_size = glm::i32vec2{width, height};
+        texture->m_valid = true;
+
+        return true;
+    }
+
+    Texture *texture;
+};
+
 Texture::Texture()
     : m_id{0}
     , m_size{0}
     , m_valid{false}
+    , m_type{DIFFUSE}
 {}
 
 Texture::Texture(uint32_t id, const glm::i32vec2 &size)
     : m_id{id}
     , m_size{size}
     , m_valid{true}
+    , m_type{DIFFUSE}
 {}
 
 Texture::~Texture()
@@ -46,40 +96,20 @@ glm::vec4 Texture::getUVRect(const glm::i32vec4 &sub_rect) const
     return uv;
 }
 
+Texture::Type Texture::getType() const
+{
+    return m_type;
+}
+
+void Texture::setType(Type type)
+{
+    m_type = type;
+}
+
 bool Texture::loadFromFile(const std::filesystem::path &path)
 {
-    destroy();
-
-    auto a_path = std::filesystem::absolute(path);
-    int32_t width, height, nr_components;
-
-    uint8_t *data = stbi_load(path.c_str(), &width, &height, &nr_components, 0);
-
-    if (!data)
-        return false;
-
-    GLenum format;
-    if (nr_components == 1)
-        format = GL_RED;
-    else if (nr_components == 3)
-        format = GL_RGB;
-    else if (nr_components == 4)
-        format = GL_RGBA;
-
-    glGenTextures(1, &m_id);
-    glBindTexture(GL_TEXTURE_2D, m_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    stbi_image_free(data);
-
-    m_size = glm::i32vec2{width, height};
-    m_valid = true;
-
-    return true;
+    TextureLoader loader{this};
+    return loader.loadFromFile(path);
 }
 
 bool Texture::isValid() const

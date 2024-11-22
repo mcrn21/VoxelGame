@@ -38,7 +38,7 @@ public:
     const glm::i32vec4 &getTextureRect() const;
     void setTextureRect(const glm::i32vec4 &texture_rect);
 
-    void draw(const RenderTarget &render_target) const;
+    void draw(const RenderTarget &render_target, const RenderState &render_state) const;
 
 private:
     void updateVertices();

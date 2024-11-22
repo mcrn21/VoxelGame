@@ -2,6 +2,7 @@
 #define EB_GRAPHICS_DRAWABLE_H
 
 #include "../Window/Window.h"
+#include "RenderState.h"
 #include "RenderTarget.h"
 
 namespace eb {
@@ -12,7 +13,7 @@ public:
     Drawable() = default;
     virtual ~Drawable() = default;
 
-    virtual void draw(const RenderTarget &) const = 0;
+    virtual void draw(const RenderTarget &, const RenderState &) const = 0;
 };
 
 } // namespace eb

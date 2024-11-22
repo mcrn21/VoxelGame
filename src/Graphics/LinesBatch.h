@@ -18,10 +18,10 @@ public:
     float getLineWidth() const;
     void setLineWidth(float line_width);
 
-    void create(const std::vector<LineVertex> &vertices);
+    void create(const std::vector<LineVertex> &vertices, const std::vector<uint32_t> &indices);
     void cube(const glm::vec3 &from, const glm::vec3 &to, const glm::vec4 &color);
 
-    void draw(const RenderTarget &render_target) const;
+    void draw(const RenderTarget &render_target, const RenderState &render_state) const;
 
 private:
     float m_line_width;

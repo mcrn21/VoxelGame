@@ -68,7 +68,8 @@ void RenderTarget::setClearColor(const glm::vec4 &color)
 
 void RenderTarget::draw(const Drawable &drawable) const
 {
-    drawable.draw(*this);
+    RenderState render_state;
+    drawable.draw(*this, render_state);
 }
 
 void RenderTarget::draw(const VertexBufferBase &vertex_buffer,

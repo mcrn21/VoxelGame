@@ -1,32 +1,24 @@
 #include "Chunk.h"
+#include "Chunks.h"
 
 #include <glm/gtc/noise.hpp>
 #include <spdlog/spdlog.h>
 
 namespace eb {
 
-Chunk::Chunk(const glm::i32vec3 &position,
-             const glm::i32vec3 &chunk_size,
-             float voxel_size,
-             float texture_size)
-    : m_position{position}
-    , m_chunk_size{chunk_size}
-    , m_voxel_size{voxel_size}
-    , m_texture_size{texture_size}
+Chunk::Chunk(const glm::i32vec3 &position, Chunks *chunks)
+    : m_chunks{chunks}
+    , m_position{position}
+    , m_light_map{chunks->getChunkSize()}
+    , m_modified{false}
 {
-    m_voxels.resize(m_chunk_size.x * m_chunk_size.y * m_chunk_size.z, Voxel{0});
+    auto &chunk_size = chunks->getChunkSize();
+    m_voxels.resize(chunk_size.x * chunk_size.y * chunk_size.z, Voxel{0});
+}
 
-    forEach([this](const Voxel *voxel, const glm::i32vec3 &index) {
-        int32_t real_x = index.x + m_position.x * m_chunk_size.x * m_voxel_size;
-        int32_t real_z = index.z * m_voxel_size + m_position.z * m_chunk_size.z * m_voxel_size;
-        int32_t real_y = index.y * m_voxel_size + m_position.y * m_chunk_size.y * m_voxel_size;
-
-        int id = glm::perlin(glm::vec3(real_x * 0.125f, real_y * 0.125f, real_z * 0.125f)) > 0.1f;
-        if (real_y <= 2)
-            id = 2;
-
-        setVoxel(index, id);
-    });
+Chunks *Chunk::getChunks() const
+{
+    return m_chunks;
 }
 
 const glm::i32vec3 &Chunk::getPosition() const
@@ -34,60 +26,28 @@ const glm::i32vec3 &Chunk::getPosition() const
     return m_position;
 }
 
-const glm::i32vec3 &Chunk::getChunkSize() const
+const Voxel *Chunk::getVoxel(const glm::i32vec3 &voxel_coords) const
 {
-    return m_chunk_size;
+    int32_t index = voxelCoordsToIndex(voxel_coords);
+    return (index < 0 || index >= m_voxels.size()) ? nullptr : &m_voxels[index];
 }
 
-float Chunk::getVoxelSize() const
+void Chunk::setVoxel(const glm::i32vec3 &voxel_coords, const Voxel &voxel)
 {
-    return m_voxel_size;
+    m_voxels[voxelCoordsToIndex(voxel_coords)] = voxel;
+    m_modified = true;
+    m_chunks->m_chunks_modfied = true;
 }
 
-float Chunk::getTextureSize() const
+Lightmap &Chunk::getLightmap()
 {
-    return m_texture_size;
+    return m_light_map;
 }
 
-const Voxel *Chunk::getVoxel(const glm::i32vec3 &index) const
+int32_t Chunk::voxelCoordsToIndex(const glm::i32vec3 &voxel_coords) const
 {
-    if (!contains(index))
-        return nullptr;
-    return &m_voxels[(index.y * m_chunk_size.z + index.z) * m_chunk_size.x + index.x];
-}
-
-void Chunk::setVoxel(const glm::i32vec3 &index, int32_t id)
-{
-    if (!contains(index))
-        return;
-    m_voxels[(index.y * m_chunk_size.z + index.z) * m_chunk_size.x + index.x].id = id;
-}
-
-bool Chunk::isBlocked(const glm::i32vec3 &index) const
-{
-    auto *voxel = getVoxel(index);
-    return voxel ? voxel->id != 0 : false;
-}
-
-bool Chunk::contains(const glm::i32vec3 &index) const
-{
-    return index.x >= 0 && index.x < m_chunk_size.x && index.y >= 0 && index.y < m_chunk_size.y
-           && index.z >= 0 && index.z < m_chunk_size.z;
-}
-
-void Chunk::forEach(const std::function<void(const Voxel *, const glm::i32vec3 &)> &func) const
-{
-    if (!func)
-        return;
-
-    glm::i32vec3 index{0};
-    for (index.y = 0; index.y < m_chunk_size.y; ++index.y) {
-        for (index.z = 0; index.z < m_chunk_size.z; ++index.z) {
-            for (index.x = 0; index.x < m_chunk_size.x; ++index.x) {
-                func(getVoxel(index), index);
-            }
-        }
-    }
+    auto &chunk_size = m_chunks->getChunkSize();
+    return (voxel_coords.y * chunk_size.z + voxel_coords.z) * chunk_size.x + voxel_coords.x;
 }
 
 } // namespace eb

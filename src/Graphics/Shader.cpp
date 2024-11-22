@@ -9,6 +9,103 @@
 
 namespace eb {
 
+struct ShaderLoader
+{
+    ShaderLoader(Shader *shader)
+        : shader{shader}
+    {}
+
+    bool loadFromFile(const std::filesystem::path &vertex_path,
+                      const std::filesystem::path &fragment_path) const
+    {
+        try {
+            std::string vertex_string = Files::readFileToString(vertex_path);
+            std::string fragment_string = Files::readFileToString(fragment_path);
+
+            return loadFromString(vertex_string, fragment_string);
+
+        } catch (const std::exception &e) {
+            spdlog::error("Error loading shader: {}", e.what());
+            return false;
+        }
+    }
+
+    bool loadFromString(const std::string &vertex_string, const std::string &fragment_string) const
+    {
+        shader->destroy();
+
+        auto vertex_result = createShaderFromString(vertex_string, GL_VERTEX_SHADER);
+        if (!vertex_result.second) {
+            spdlog::error("Error in shader: {}", vertex_string);
+            return false;
+        }
+
+        auto fragment_result = createShaderFromString(fragment_string, GL_FRAGMENT_SHADER);
+        if (!fragment_result.second) {
+            spdlog::error("Error in shader: {}", fragment_string);
+            return false;
+        }
+
+        auto programm_result = createProgramm({vertex_result.first, fragment_result.first});
+
+        if (programm_result.second) {
+            shader->m_valid = true;
+            shader->m_id = programm_result.first;
+        }
+
+        glDeleteShader(vertex_result.first);
+        glDeleteShader(fragment_result.second);
+
+        return true;
+    }
+
+    std::pair<uint32_t, bool> createShaderFromString(const std::string &shader_str,
+                                                     int32_t type) const
+    {
+        const GLchar *code = shader_str.c_str();
+        GLuint shader;
+        GLint success;
+        GLchar info_log[512];
+
+        shader = glCreateShader(type);
+        glShaderSource(shader, 1, &code, nullptr);
+        glCompileShader(shader);
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(shader, 512, nullptr, info_log);
+            spdlog::error("Shader compilation error: {}", info_log);
+            glDeleteShader(shader);
+            return {0, false};
+        }
+
+        return {shader, true};
+    }
+
+    std::pair<uint32_t, bool> createProgramm(const std::vector<uint32_t> &shaders) const
+    {
+        GLuint programm = glCreateProgram();
+
+        for (uint32_t shader : shaders)
+            glAttachShader(programm, shader);
+
+        glLinkProgram(programm);
+
+        GLint success;
+        GLchar info_log[512];
+
+        glGetProgramiv(programm, GL_LINK_STATUS, &success);
+        if (!success) {
+            glGetProgramInfoLog(programm, 512, nullptr, info_log);
+            spdlog::error("Shader compilation error: {}", info_log);
+            return {0, false};
+        }
+
+        return {programm, true};
+    }
+
+    Shader *shader;
+};
+
 Shader::Shader()
     : m_id{0}
     , m_valid{false}
@@ -46,45 +143,14 @@ uint32_t Shader::getId() const
 bool Shader::loadFromFile(const std::filesystem::path &vertex_path,
                           const std::filesystem::path &fragment_path)
 {
-    try {
-        std::string vertex_string = Files::readFileToString(vertex_path);
-        std::string fragment_string = Files::readFileToString(fragment_path);
-
-        return loadFromString(vertex_string, fragment_string);
-
-    } catch (const std::exception &e) {
-        spdlog::error("Error loading shader: {}", e.what());
-        return false;
-    }
+    ShaderLoader loader{this};
+    return loader.loadFromFile(vertex_path, fragment_path);
 }
 
 bool Shader::loadFromString(const std::string &vertex_string, const std::string &fragment_string)
 {
-    destroy();
-
-    auto vertex_result = createShaderFromString(vertex_string, GL_VERTEX_SHADER);
-    if (!vertex_result.second) {
-        spdlog::error("Error in shader: {}", vertex_string);
-        return false;
-    }
-
-    auto fragment_result = createShaderFromString(fragment_string, GL_FRAGMENT_SHADER);
-    if (!fragment_result.second) {
-        spdlog::error("Error in shader: {}", fragment_string);
-        return false;
-    }
-
-    auto programm_result = createProgramm({vertex_result.first, fragment_result.first});
-
-    if (programm_result.second) {
-        m_valid = true;
-        m_id = programm_result.first;
-    }
-
-    glDeleteShader(vertex_result.first);
-    glDeleteShader(fragment_result.second);
-
-    return true;
+    ShaderLoader loader{this};
+    return loader.loadFromString(vertex_string, fragment_string);
 }
 
 bool Shader::isValid() const
@@ -115,49 +181,6 @@ void Shader::use(const Shader *shader)
 
     if (shader->m_valid)
         glUseProgram(shader->m_id);
-}
-
-std::pair<uint32_t, bool> Shader::createShaderFromString(const std::string &shader_str, int32_t type)
-{
-    const GLchar *code = shader_str.c_str();
-    GLuint shader;
-    GLint success;
-    GLchar info_log[512];
-
-    shader = glCreateShader(type);
-    glShaderSource(shader, 1, &code, nullptr);
-    glCompileShader(shader);
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(shader, 512, nullptr, info_log);
-        spdlog::error("Shader compilation error: {}", info_log);
-        glDeleteShader(shader);
-        return {0, false};
-    }
-
-    return {shader, true};
-}
-
-std::pair<uint32_t, bool> Shader::createProgramm(const std::vector<uint32_t> &shaders)
-{
-    GLuint programm = glCreateProgram();
-
-    for (uint32_t shader : shaders)
-        glAttachShader(programm, shader);
-
-    glLinkProgram(programm);
-
-    GLint success;
-    GLchar info_log[512];
-
-    glGetProgramiv(programm, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(programm, 512, nullptr, info_log);
-        spdlog::error("Shader compilation error: {}", info_log);
-        return {0, false};
-    }
-
-    return {programm, true};
 }
 
 } // namespace eb

@@ -1,12 +1,97 @@
 #include "ChunkMesh.h"
+#include "../Utils/VecUtils.h"
 #include "../Voxel/Chunk.h"
 #include "../Voxel/Chunks.h"
 #include "DefaultShaders.h"
 
 namespace eb {
 
-static glm::i32vec3 NEIGHBOURS[6]
+static const glm::i32vec3 NEIGHBOURS[6]
     = {{0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}};
+
+static const glm::i32vec3 FRONT_SIDE_NEIGHBOURS[9] = {{0, 0, 1},
+                                                      {-1, 1, 1},
+                                                      {0, 1, 1},
+                                                      {1, 1, 1},
+                                                      {1, 0, 1},
+                                                      {1, -1, 1},
+                                                      {0, -1, 1},
+                                                      {-1, -1, 1},
+                                                      {-1, 0, 1}};
+
+static const glm::i32vec3 BACK_SIDE_NEIGHBOURS[9] = {{0, 0, -1},
+                                                     {1, 1, -1},
+                                                     {0, 1, -1},
+                                                     {-1, 1, -1},
+                                                     {-1, 0, -1},
+                                                     {-1, -1, -1},
+                                                     {0, -1, -1},
+                                                     {1, -1, -1},
+                                                     {1, 0, -1}};
+
+static const glm::i32vec3 UP_SIDE_NEIGHBOURS[9] = {{0, 1, 0},
+                                                   {-1, 1, -1},
+                                                   {0, 1, -1},
+                                                   {1, 1, -1},
+                                                   {1, 1, 0},
+                                                   {1, 1, 1},
+                                                   {0, 1, 1},
+                                                   {-1, 1, 1},
+                                                   {-1, 1, 0}};
+
+static const glm::i32vec3 DOWN_SIDE_NEIGHBOURS[9] = {{0, -1, 0},
+                                                     {1, -1, -1},
+                                                     {0, -1, -1},
+                                                     {-1, -1, -1},
+                                                     {-1, -1, 0},
+                                                     {-1, -1, 1},
+                                                     {0, -1, 1},
+                                                     {1, -1, 1},
+                                                     {1, -1, 0}};
+
+static const glm::i32vec3 RIGHT_SIDE_NEIGHBOURS[9] = {{1, 0, 0},
+                                                      {1, 1, 1},
+                                                      {1, 1, 0},
+                                                      {1, 1, -1},
+                                                      {1, 0, -1},
+                                                      {1, -1, -1},
+                                                      {1, -1, 0},
+                                                      {1, -1, 1},
+                                                      {1, 0, 1}};
+
+static const glm::i32vec3 LEFT_SIDE_NEIGHBOURS[9] = {{-1, 0, 0},
+                                                     {-1, 1, -1},
+                                                     {-1, 1, 0},
+                                                     {-1, 1, 1},
+                                                     {-1, 0, 1},
+                                                     {-1, -1, 1},
+                                                     {-1, -1, 0},
+                                                     {-1, -1, -1},
+                                                     {-1, 0, -1}};
+
+void ChunkMesh::Light::calculate(Chunks *chunks,
+                                 const glm::i32vec3 &voxel_coords,
+                                 const glm::i32vec3 (&neighbours)[9])
+{
+    for (int32_t i = 0; i < 4; ++i) {
+        float l = chunks->getLight(voxel_coords + neighbours[0], i);
+
+        float a = chunks->getLight(voxel_coords + neighbours[1], i);
+        float b = chunks->getLight(voxel_coords + neighbours[2], i);
+        float c = chunks->getLight(voxel_coords + neighbours[3], i);
+        float d = chunks->getLight(voxel_coords + neighbours[4], i);
+
+        float e = chunks->getLight(voxel_coords + neighbours[5], i);
+        float f = chunks->getLight(voxel_coords + neighbours[6], i);
+        float g = chunks->getLight(voxel_coords + neighbours[7], i);
+        float h = chunks->getLight(voxel_coords + neighbours[8], i);
+
+        ((reinterpret_cast<float *>(&p1))[i]) = (l * f0 + h + g + f) / f1;
+        ((reinterpret_cast<float *>(&p2))[i]) = (l * f0 + f + e + d) / f1;
+        ((reinterpret_cast<float *>(&p3))[i]) = (l * f0 + d + c + b) / f1;
+        ((reinterpret_cast<float *>(&p4))[i]) = (l * f0 + b + a + h) / f1;
+    }
+}
 
 ChunkMesh::ChunkMesh(Engine *engine)
     : EngineObject{engine}
@@ -18,6 +103,7 @@ ChunkMesh::ChunkMesh(Engine *engine, const std::shared_ptr<Texture> &texture)
     : EngineObject{engine}
     , Drawable{}
     , Transformable{}
+    , m_vertex_buffer{VertexBufferBase::DYNAMIC}
 {
     setTexture(texture);
 }
@@ -32,448 +118,215 @@ void ChunkMesh::setTexture(const std::shared_ptr<Texture> &texture)
     m_texture = texture;
 }
 
-void ChunkMesh::create(Chunk *chunk)
+void ChunkMesh::create(Chunks *chunks, const glm::i32vec3 &chunk_coords)
 {
     m_vertex_buffer.destroy();
-
-    std::vector<VoxelVertex> vertices;
-
-    float voxel_size = chunk->getVoxelSize();
-    float texture_size = chunk->getTextureSize();
-
-    AmbientOcclusion ao;
-
-    chunk->forEach([this,
-                    &chunk,
-                    &voxel_size,
-                    &texture_size,
-                    &vertices,
-                    &ao](const Voxel *voxel, const glm::i32vec3 &index) {
-        if (voxel->id == 0)
-            return;
-
-        auto uv = m_texture->getUVRect(
-            {texture_size * (voxel->id - 1), 0, texture_size, texture_size});
-
-        glm::vec3 offset = {index.x * voxel_size, index.y * voxel_size, index.z * voxel_size};
-
-        // Z+ Front side
-        if (!chunk->isBlocked({index.x, index.y, index.z + 1}))
-            createFrontSide(vertices, offset, uv, voxel_size, ao);
-
-        // Z- Back side
-        if (!chunk->isBlocked({index.x, index.y, index.z - 1}))
-            createBackSide(vertices, offset, uv, voxel_size, ao);
-
-        // Y+ Up side
-        if (!chunk->isBlocked({index.x, index.y + 1, index.z}))
-            createUpSide(vertices, offset, uv, voxel_size, ao);
-
-        // Y- Down side
-        if (!chunk->isBlocked({index.x, index.y - 1, index.z}))
-            createDownSide(vertices, offset, uv, voxel_size, ao);
-
-        // X+ Right side
-        if (!chunk->isBlocked({index.x + 1, index.y, index.z}))
-            createRightSide(vertices, offset, uv, voxel_size, ao);
-
-        // X- Left side
-        if (!chunk->isBlocked({index.x - 1, index.y, index.z}))
-            createLeftSide(vertices, offset, uv, voxel_size, ao);
-    });
-
-    m_vertex_buffer.create(vertices);
-}
-
-void ChunkMesh::create(Chunks *chunks, const glm::i32vec3 &index)
-{
-    m_vertex_buffer.destroy();
-
-    std::vector<VoxelVertex> vertices;
 
     float voxel_size = chunks->getVoxelSize();
     float texture_size = chunks->getTextureSize();
-    glm::i32vec3 voxel_coords_offset = index * chunks->getChunkSize();
-    auto *chunk = chunks->getChunk(index);
 
-    AmbientOcclusion ao;
+    Light light;
+    std::vector<VoxelVertex> vertices;
+    std::vector<uint32_t> indices;
 
-    chunk->forEach([this,
-                    &chunks,
-                    &chunk,
-                    &voxel_size,
-                    &texture_size,
-                    &voxel_coords_offset,
-                    &vertices,
-                    &ao](const Voxel *voxel, const glm::i32vec3 &index) {
-        if (voxel->id == 0)
-            return;
+    chunks->forEachVoxelsInChunk(
+        chunk_coords,
+        [this, &chunks, &voxel_size, &texture_size, &light, &vertices, &indices](
+            const glm::i32vec3 &voxel_coords_in_chunk, const glm::i32vec3 &voxel_coords) {
+            auto *voxel = chunks->getVoxel(voxel_coords);
 
-        auto uv = m_texture->getUVRect(
-            {texture_size * (voxel->id - 1), 0, texture_size, texture_size});
+            if (voxel->id == 0)
+                return;
 
-        glm::vec3 offset = {index.x * voxel_size, index.y * voxel_size, index.z * voxel_size};
-        glm::i32vec3 chunks_index = voxel_coords_offset + index;
+            auto uv = m_texture->getUVRect(
+                {texture_size * (voxel->id - 1), 0, texture_size, texture_size});
 
-        ao.clear();
+            glm::vec3 offset = static_cast<glm::vec3>(voxel_coords_in_chunk) * voxel_size;
 
-        // Z+ Front side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[0])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, 1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{0, 1, 1}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, 1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{1, 0, 1}) * ao.factor;
+            // Z+ Front side
+            if (!chunks->isVoxelBlocked(voxel_coords + FRONT_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, FRONT_SIDE_NEIGHBOURS);
+                createFrontSide(vertices, indices, offset, uv, voxel_size, light);
+            }
 
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, 1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{0, -1, 1}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, 1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 0, 1}) * ao.factor;
+            // Z- Back side
+            if (!chunks->isVoxelBlocked(voxel_coords + BACK_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, BACK_SIDE_NEIGHBOURS);
+                createBackSide(vertices, indices, offset, uv, voxel_size, light);
+            }
 
-            ao.p1 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.a - ao.h);
+            // Y+ Up side
+            if (!chunks->isVoxelBlocked(voxel_coords + UP_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, UP_SIDE_NEIGHBOURS);
+                createUpSide(vertices, indices, offset, uv, voxel_size, light);
+            }
 
-            ao.p4 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p5 = ao.light * (1.0f - ao.d - ao.c - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.a - ao.h);
+            // Y- Down side
+            if (!chunks->isVoxelBlocked(voxel_coords + DOWN_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, DOWN_SIDE_NEIGHBOURS);
+                createDownSide(vertices, indices, offset, uv, voxel_size, light);
+            }
 
-            createFrontSide(vertices, offset, uv, voxel_size, ao);
-        }
+            // X+ Right side
+            if (!chunks->isVoxelBlocked(voxel_coords + RIGHT_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, RIGHT_SIDE_NEIGHBOURS);
+                createRightSide(vertices, indices, offset, uv, voxel_size, light);
+            }
 
-        ao.clear();
+            // X- Left side
+            if (!chunks->isVoxelBlocked(voxel_coords + LEFT_SIDE_NEIGHBOURS[0])) {
+                light.calculate(chunks, voxel_coords, LEFT_SIDE_NEIGHBOURS);
+                createLeftSide(vertices, indices, offset, uv, voxel_size, light);
+            }
+        });
 
-        // Z- Back side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[1])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, -1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{0, 1, -1}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, -1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{1, 0, -1}) * ao.factor;
-
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, -1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{0, -1, -1}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, -1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 0, -1}) * ao.factor;
-
-            ao.p1 = ao.light * (1.0f - ao.d - ao.e - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            ao.p4 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p5 = ao.light * (1.0f - ao.h - ao.a - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            createBackSide(vertices, offset, uv, voxel_size, ao);
-        }
-
-        ao.clear();
-
-        // Y+ Up side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[2])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, -1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{0, 1, -1}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, -1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, 0}) * ao.factor;
-
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, 1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{0, 1, 1}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, 1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, 0}) * ao.factor;
-
-            ao.p1 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.a - ao.h);
-
-            ao.p4 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p5 = ao.light * (1.0f - ao.d - ao.c - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.a - ao.h);
-
-            createUpSide(vertices, offset, uv, voxel_size, ao);
-        }
-
-        ao.clear();
-
-        // Y- Down side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[3])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, -1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{0, -1, -1}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, -1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, 0}) * ao.factor;
-
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, 1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{0, -1, 1}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, 1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, 0}) * ao.factor;
-
-            ao.p1 = ao.light * (1.0f - ao.d - ao.e - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            ao.p4 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p5 = ao.light * (1.0f - ao.h - ao.a - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            createDownSide(vertices, offset, uv, voxel_size, ao);
-        }
-
-        ao.clear();
-
-        // X+ Right side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[4])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, 1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, 0}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{1, 1, -1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{1, 0, -1}) * ao.factor;
-
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, -1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, 0}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{1, -1, 1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{1, 0, 1}) * ao.factor;
-
-            ao.p1 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.a - ao.h);
-
-            ao.p4 = ao.light * (1.0f - ao.f - ao.e - ao.d);
-            ao.p5 = ao.light * (1.0f - ao.d - ao.c - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.a - ao.h);
-
-            createRightSide(vertices, offset, uv, voxel_size, ao);
-        }
-
-        ao.clear();
-
-        // X- Left side
-        if (!chunks->isBlocked(chunks_index + NEIGHBOURS[5])) {
-            ao.a = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, 1}) * ao.factor;
-            ao.b = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, 0}) * ao.factor;
-            ao.c = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 1, -1}) * ao.factor;
-            ao.d = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 0, -1}) * ao.factor;
-
-            ao.e = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, -1}) * ao.factor;
-            ao.f = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, 0}) * ao.factor;
-            ao.g = chunks->isBlocked(chunks_index + glm::i32vec3{-1, -1, 1}) * ao.factor;
-            ao.h = chunks->isBlocked(chunks_index + glm::i32vec3{-1, 0, 1}) * ao.factor;
-
-            ao.p1 = ao.light * (1.0f - ao.d - ao.e - ao.f);
-            ao.p2 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p3 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            ao.p4 = ao.light * (1.0f - ao.h - ao.g - ao.f);
-            ao.p5 = ao.light * (1.0f - ao.h - ao.a - ao.b);
-            ao.p6 = ao.light * (1.0f - ao.b - ao.c - ao.d);
-
-            createLeftSide(vertices, offset, uv, voxel_size, ao);
-        }
-    });
-
-    m_vertex_buffer.create(vertices);
+    m_vertex_buffer.create(vertices.size(), indices.size());
+    m_vertex_buffer.update(vertices, indices);
 }
 
-void ChunkMesh::draw(const RenderTarget &render_target) const
+void ChunkMesh::draw(const RenderTarget &render_target, const RenderState &render_state) const
 {
-    if (m_texture) {
-        RenderState render_state;
-        render_state.transform = getTransform();
-        render_state.shader = DefaultShaders::getVoxels().get();
-        render_state.texture = m_texture.get();
-        render_target.draw(m_vertex_buffer, render_state);
-    }
+    RenderState new_render_state = render_state;
+    new_render_state.transform *= getTransform();
+    new_render_state.shader = DefaultShaders::getVoxels().get();
+    new_render_state.texture = m_texture.get();
+    render_target.draw(m_vertex_buffer, new_render_state);
 }
 
 void ChunkMesh::createUpSide(std::vector<VoxelVertex> &vertices,
+                             std::vector<uint32_t> &indices,
                              const glm::vec3 &offset,
                              const glm::vec4 &uv,
                              float voxel_size,
-                             const AmbientOcclusion &ao)
+                             const Light &light)
 {
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.w},
-                                   ao.p1});
-    vertices.push_back(
-        VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z + voxel_size},
-                    glm::vec4{1.0f},
-                    {uv.z, uv.w},
-                    ao.p2});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p3});
+    appendIndices(indices, vertices.size());
 
+    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z + voxel_size},
+                                   {uv.x, uv.w},
+                                   light.p1});
     vertices.push_back(
         VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z + voxel_size},
-                    glm::vec4{1.0f},
                     {uv.z, uv.w},
-                    ao.p4});
+                    light.p2});
     vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
                                    {uv.z, uv.y},
-                                   ao.p5});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p6});
+                                   light.p3});
+    vertices.push_back(
+        VoxelVertex{{offset.x, offset.y + voxel_size, offset.z}, {uv.x, uv.y}, light.p4});
 }
 
 void ChunkMesh::createDownSide(std::vector<VoxelVertex> &vertices,
+                               std::vector<uint32_t> &indices,
                                const glm::vec3 &offset,
                                const glm::vec4 &uv,
                                float voxel_size,
-                               const AmbientOcclusion &ao)
+                               const Light &light)
 {
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.w},
-                                   ao.p1});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p2});
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p3});
+    appendIndices(indices, vertices.size());
 
-    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p4});
+    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z + voxel_size},
+                                   {uv.x, uv.w},
+                                   light.p1});
     vertices.push_back(
-        VoxelVertex{{offset.x, offset.y, offset.z}, glm::vec4{1.0f}, {uv.z, uv.y}, ao.p5});
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p6});
+        VoxelVertex{{offset.x, offset.y, offset.z + voxel_size}, {uv.z, uv.w}, light.p2});
+    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z}, {uv.z, uv.y}, light.p3});
+    vertices.push_back(
+        VoxelVertex{{offset.x + voxel_size, offset.y, offset.z}, {uv.x, uv.y}, light.p4});
 }
 
 void ChunkMesh::createLeftSide(std::vector<VoxelVertex> &vertices,
+                               std::vector<uint32_t> &indices,
                                const glm::vec3 &offset,
                                const glm::vec4 &uv,
                                float voxel_size,
-                               const AmbientOcclusion &ao)
+                               const Light &light)
 {
-    vertices.push_back(
-        VoxelVertex{{offset.x, offset.y, offset.z}, glm::vec4{1.0f}, {uv.x, uv.w}, ao.p1});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p2});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p3});
+    appendIndices(indices, vertices.size());
 
-    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p4});
+    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z}, {uv.x, uv.w}, light.p1});
+    vertices.push_back(
+        VoxelVertex{{offset.x, offset.y, offset.z + voxel_size}, {uv.z, uv.w}, light.p2});
     vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
                                    {uv.z, uv.y},
-                                   ao.p5});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p6});
+                                   light.p3});
+    vertices.push_back(
+        VoxelVertex{{offset.x, offset.y + voxel_size, offset.z}, {uv.x, uv.y}, light.p4});
 }
 
 void ChunkMesh::createRightSide(std::vector<VoxelVertex> &vertices,
+                                std::vector<uint32_t> &indices,
                                 const glm::vec3 &offset,
                                 const glm::vec4 &uv,
                                 float voxel_size,
-                                const AmbientOcclusion &ao)
+                                const Light &light)
 {
+    appendIndices(indices, vertices.size());
+
     vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
                                    {uv.x, uv.w},
-                                   ao.p1});
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p2});
+                                   light.p1});
     vertices.push_back(
-        VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z + voxel_size},
-                    glm::vec4{1.0f},
-                    {uv.x, uv.y},
-                    ao.p3});
-
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p4});
-
+        VoxelVertex{{offset.x + voxel_size, offset.y, offset.z}, {uv.z, uv.w}, light.p2});
     vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
                                    {uv.z, uv.y},
-                                   ao.p5});
+                                   light.p3});
     vertices.push_back(
         VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z + voxel_size},
-                    glm::vec4{1.0f},
                     {uv.x, uv.y},
-                    ao.p6});
+                    light.p4});
 }
 
 void ChunkMesh::createFrontSide(std::vector<VoxelVertex> &vertices,
+                                std::vector<uint32_t> &indices,
                                 const glm::vec3 &offset,
                                 const glm::vec4 &uv,
                                 float voxel_size,
-                                const AmbientOcclusion &ao)
+                                const Light &light)
 {
-    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.w},
-                                   ao.p1});
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.w},
-                                   ao.p2});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p3});
+    appendIndices(indices, vertices.size());
 
+    vertices.push_back(
+        VoxelVertex{{offset.x, offset.y, offset.z + voxel_size}, {uv.x, uv.w}, light.p1});
     vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
                                    {uv.z, uv.w},
-                                   ao.p4});
+                                   light.p2});
     vertices.push_back(
         VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z + voxel_size},
-                    glm::vec4{1.0f},
                     {uv.z, uv.y},
-                    ao.p5});
+                    light.p3});
     vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z + voxel_size},
-                                   glm::vec4{1.0f},
                                    {uv.x, uv.y},
-                                   ao.p6});
+                                   light.p4});
 }
 
 void ChunkMesh::createBackSide(std::vector<VoxelVertex> &vertices,
+                               std::vector<uint32_t> &indices,
                                const glm::vec3 &offset,
                                const glm::vec4 &uv,
                                float voxel_size,
-                               const AmbientOcclusion &ao)
+                               const Light &light)
 {
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.w},
-                                   ao.p1});
-    vertices.push_back(
-        VoxelVertex{{offset.x, offset.y, offset.z}, glm::vec4{1.0f}, {uv.z, uv.w}, ao.p2});
-    vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.x, uv.y},
-                                   ao.p3});
+    appendIndices(indices, vertices.size());
 
     vertices.push_back(
-        VoxelVertex{{offset.x, offset.y, offset.z}, glm::vec4{1.0f}, {uv.z, uv.w}, ao.p4});
-    vertices.push_back(VoxelVertex{{offset.x, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
-                                   {uv.z, uv.y},
-                                   ao.p5});
+        VoxelVertex{{offset.x + voxel_size, offset.y, offset.z}, {uv.x, uv.w}, light.p1});
+    vertices.push_back(VoxelVertex{{offset.x, offset.y, offset.z}, {uv.z, uv.w}, light.p2});
+    vertices.push_back(
+        VoxelVertex{{offset.x, offset.y + voxel_size, offset.z}, {uv.z, uv.y}, light.p3});
     vertices.push_back(VoxelVertex{{offset.x + voxel_size, offset.y + voxel_size, offset.z},
-                                   glm::vec4{1.0f},
                                    {uv.x, uv.y},
-                                   ao.p6});
+                                   light.p4});
+}
+
+void ChunkMesh::appendIndices(std::vector<uint32_t> &indices, int32_t vertices_offset) const
+{
+    indices.push_back(vertices_offset);
+    indices.push_back(vertices_offset + 1);
+    indices.push_back(vertices_offset + 3);
+    indices.push_back(vertices_offset + 1);
+    indices.push_back(vertices_offset + 2);
+    indices.push_back(vertices_offset + 3);
 }
 
 } // namespace eb

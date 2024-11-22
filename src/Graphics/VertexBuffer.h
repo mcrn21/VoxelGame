@@ -14,18 +14,26 @@ namespace eb {
 class VertexBufferBase
 {
 public:
+    enum UsageType { STATIC = GL_STATIC_DRAW, DYNAMIC = GL_DYNAMIC_DRAW, STREAM = GL_STREAM_DRAW };
     enum PrimitiveType { TRIANGLES = GL_TRIANGLES, LINES = GL_LINES };
 
-    VertexBufferBase()
-        : m_vbo{}
-        , m_vao{}
-        , m_size{0}
+    VertexBufferBase(UsageType usage_type = DYNAMIC)
+        : m_usage_type{usage_type}
+        , m_vbo{0}
+        , m_ebo{0}
+        , m_vao{0}
+        , m_vertex_count{0}
+        , m_indices_count{0}
         , m_valid{false}
     {}
     virtual ~VertexBufferBase() { destroy(); }
 
-    int32_t getSize() const { return m_size; }
-
+    UsageType getUsageType() const { return m_usage_type; }
+    int32_t getVertexCount() const { return m_vertex_count; }
+    int32_t getIndicesCount() const { return m_indices_count; }
+    uint32_t getVboId() const { return m_vbo; };
+    uint32_t getEboId() const { return m_ebo; };
+    uint32_t getVaoId() const { return m_vao; };
     bool isValid() const { return m_valid; }
 
     void destroy()
@@ -34,11 +42,14 @@ public:
             return;
 
         glDeleteBuffers(1, &m_vbo);
+        glDeleteBuffers(1, &m_ebo);
         glDeleteVertexArrays(1, &m_vao);
 
         m_vbo = 0;
+        m_ebo = 0;
         m_vao = 0;
-        m_size = 0;
+        m_vertex_count = 0;
+        m_indices_count = 0;
         m_bounds = {glm::vec3{0.0f}, glm::vec3{0.0f}};
         m_valid = false;
     }
@@ -47,7 +58,7 @@ public:
     {
         if (m_valid) {
             bind(this);
-            glDrawArrays(primitive_type, 0, m_size);
+            glDrawElements(primitive_type, m_indices_count, GL_UNSIGNED_INT, 0);
             bind(nullptr);
         }
     }
@@ -64,9 +75,12 @@ public:
     }
 
 protected:
+    UsageType m_usage_type;
     uint32_t m_vbo;
+    uint32_t m_ebo;
     uint32_t m_vao;
-    int32_t m_size;
+    int32_t m_vertex_count;
+    int32_t m_indices_count;
     std::pair<glm::vec3, glm::vec3> m_bounds;
     bool m_valid;
 };
@@ -75,30 +89,34 @@ template<typename T, int32_t... Is>
 class VertexBuffer : public VertexBufferBase
 {
 public:
-    VertexBuffer()
-        : VertexBufferBase{}
+    VertexBuffer(UsageType usage_type = STATIC)
+        : VertexBufferBase{usage_type}
     {}
-    VertexBuffer(const std::vector<T> &vertices)
-        : VertexBufferBase{}
+    VertexBuffer(const std::vector<T> &vertices, UsageType usage_type = STATIC)
+        : VertexBufferBase{usage_type}
     {
         create(vertices);
     }
     ~VertexBuffer() = default;
 
-    void create(const std::vector<T> &vertices)
+    void create(int32_t vertex_count, int32_t indices_count)
     {
         destroy();
 
-        if (vertices.empty())
-            return;
-
         glGenVertexArrays(1, &m_vao);
         glGenBuffers(1, &m_vbo);
+        glGenBuffers(1, &m_ebo);
 
         glBindVertexArray(m_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
-        glBufferData(GL_ARRAY_BUFFER, sizeof(T) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(T) * vertex_count, nullptr, m_usage_type);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                     sizeof(uint32_t) * indices_count,
+                     nullptr,
+                     m_usage_type);
 
         std::array<int32_t, ATTRS_COUNT> attrs = {POSITION_SIZE, Is...};
         int32_t byte_offset = 0;
@@ -113,7 +131,42 @@ public:
             byte_offset += attrs[i];
         }
 
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        m_vertex_count = vertex_count;
+        m_indices_count = indices_count;
+        m_valid = true;
+    }
+
+    void update(const std::vector<T> &vertices, const std::vector<uint32_t> &indices)
+    {
+        if (!m_valid)
+            return;
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+
+        if (vertices.size() > m_vertex_count) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(T) * vertices.size(), 0, m_usage_type);
+            m_vertex_count = vertices.size();
+        }
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(T) * vertices.size(), vertices.data());
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ebo);
+
+        if (indices.size() > m_indices_count) {
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                         sizeof(uint32_t) * indices.size(),
+                         0,
+                         m_usage_type);
+            m_indices_count = indices.size();
+        }
+
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER,
+                        0,
+                        sizeof(uint32_t) * indices.size(),
+                        indices.data());
 
         for (const auto &vertex : vertices) {
             m_bounds.first.x = std::min(vertex.position.x, m_bounds.first.x);
@@ -125,8 +178,7 @@ public:
             m_bounds.second.z = std::max(vertex.position.z, m_bounds.second.z);
         }
 
-        m_size = vertices.size();
-        m_valid = true;
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
 private:

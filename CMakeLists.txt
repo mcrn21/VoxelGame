@@ -10,6 +10,7 @@ find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED COMPONENTS OpenGL)
 find_package(glm CONFIG REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(assimp REQUIRED)
 
 add_executable(VoxelGame src/main.cpp
     src/Window/Window.h src/Window/Window.cpp
@@ -38,15 +39,20 @@ add_executable(VoxelGame src/main.cpp
     src/Voxel/Chunk.h src/Voxel/Chunk.cpp
     src/Graphics/ChunkMesh.h src/Graphics/ChunkMesh.cpp
     src/Voxel/Chunks.h src/Voxel/Chunks.cpp
-    src/Graphics/VoxelVertex.h
+
     src/Graphics/RenderTarget.h src/Graphics/RenderTarget.cpp
     src/Graphics/DefaultShaders.h src/Graphics/DefaultShaders.cpp
     src/Graphics/LinesBatch.h src/Graphics/LinesBatch.cpp
     src/Graphics/LineVertex.h
+    src/VoxelLigtning/Lightmap.h src/VoxelLigtning/Lightmap.cpp
+    src/VoxelLigtning/LightSolver.h src/VoxelLigtning/LightSolver.cpp
+    src/Utils/VecUtils.h
+    src/Graphics/Mesh.h src/Graphics/Mesh.cpp
+    src/Graphics/Model.h src/Graphics/Model.cpp
 
 )
 
-target_link_libraries(VoxelGame PRIVATE glfw GLEW::glew OpenGL::OpenGL glm::glm spdlog::spdlog)
+target_link_libraries(VoxelGame PRIVATE glfw GLEW::glew OpenGL::OpenGL glm::glm spdlog::spdlog assimp::assimp)
 
 include(GNUInstallDirs)
 install(TARGETS VoxelGame

@@ -13,6 +13,7 @@ struct DefaultShaders
     static std::shared_ptr<Shader> getMain2D();
     static std::shared_ptr<Shader> getVoxels();
     static std::shared_ptr<Shader> getLines();
+    static std::shared_ptr<Shader> getMesh();
 };
 
 } // namespace eb

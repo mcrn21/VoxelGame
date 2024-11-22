@@ -6,12 +6,15 @@
 #include <filesystem>
 #include <stdint.h>
 #include <string>
-#include <vector>
 
 namespace eb {
 
+class ShaderLoader;
+
 class Shader
 {
+    friend class ShaderLoader;
+
 public:
     Shader();
     Shader(uint32_t id);
@@ -30,10 +33,6 @@ public:
     void uniformMatrix(const std::string &name, glm::mat4 matrix);
 
     static void use(const Shader *shader);
-
-private:
-    std::pair<uint32_t, bool> createShaderFromString(const std::string &shader_str, int32_t type);
-    std::pair<uint32_t, bool> createProgramm(const std::vector<uint32_t> &shaders);
 
 private:
     uint32_t m_id;

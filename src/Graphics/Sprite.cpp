@@ -77,18 +77,16 @@ void Sprite::setTextureRect(const glm::i32vec4 &texture_rect)
     updateVertices();
 }
 
-void Sprite::draw(const RenderTarget &render_target) const
+void Sprite::draw(const RenderTarget &render_target, const RenderState &render_state) const
 {
-    if (m_texture) {
-        RenderState render_state;
-        render_state.transform = getTransform();
-        render_state.shader = m_shader.get();
-        render_state.texture = m_texture.get();
-        if (m_draw_type == DRAW_3D)
-            render_target.draw(m_vertex_buffer, render_state);
-        else
-            render_target.draw2D(m_vertex_buffer, render_state);
-    }
+    RenderState new_render_state = render_state;
+    new_render_state.transform *= getTransform();
+    new_render_state.shader = m_shader.get();
+    new_render_state.texture = m_texture.get();
+    if (m_draw_type == DRAW_3D)
+        render_target.draw(m_vertex_buffer, new_render_state);
+    else
+        render_target.draw2D(m_vertex_buffer, new_render_state);
 }
 
 void Sprite::updateVertices()
@@ -102,13 +100,13 @@ void Sprite::updateVertices()
 
     std::vector<Vertex> vertices = {{{0.0f, 0.0f, 0.0f}, {uv.x, uv.w}},
                                     {{m_texture_rect.z, 0.0f, 0.0f}, {uv.z, uv.w}},
-                                    {{0.0f, m_texture_rect.w, 0.0f}, {uv.x, uv.y}},
-
-                                    {{m_texture_rect.z, 0.0f, 0.0f}, {uv.z, uv.w}},
                                     {{m_texture_rect.z, m_texture_rect.w, 0.0f}, {uv.z, uv.y}},
                                     {{0.0f, m_texture_rect.w, 0.0f}, {uv.x, uv.y}}};
 
-    m_vertex_buffer.create(vertices);
+    static const std::vector<uint32_t> indices = {0, 1, 3, 1, 2, 3};
+
+    m_vertex_buffer.create(vertices.size(), indices.size());
+    m_vertex_buffer.update(vertices, indices);
 }
 
 } // namespace eb
