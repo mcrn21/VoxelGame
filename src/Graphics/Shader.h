@@ -30,7 +30,9 @@ public:
     bool isValid() const;
     void destroy();
 
-    void uniformMatrix(const std::string &name, glm::mat4 matrix);
+    void uniformMatrix(const std::string &name, const glm::mat4 &matrix);
+    void uniformVec3(const std::string &name, const glm::vec3 &vec);
+    void uniformFloat(const std::string &name, float value);
 
     static void use(const Shader *shader);
 

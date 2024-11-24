@@ -6,7 +6,9 @@ namespace eb {
 LinesBatch::LinesBatch(Engine *engine)
     : EngineObject{engine}
     , m_line_width{1.0f}
-{}
+{
+    m_vertex_array.create<LineVertex, 3, 4>();
+}
 
 float LinesBatch::getLineWidth() const
 {
@@ -21,8 +23,7 @@ void LinesBatch::setLineWidth(float line_width)
 void LinesBatch::create(const std::vector<LineVertex> &vertices,
                         const std::vector<uint32_t> &indices)
 {
-    m_vertex_buffer.create(vertices.size(), indices.size());
-    m_vertex_buffer.update(vertices, indices);
+    m_vertex_array.setData(vertices, indices);
 }
 
 void LinesBatch::cube(const glm::vec3 &from, const glm::vec3 &to, const glm::vec4 &color)
@@ -45,7 +46,7 @@ void LinesBatch::cube(const glm::vec3 &from, const glm::vec3 &to, const glm::vec
                                                   4, 5, 5, 6, 6, 7, 7, 4, // front
                                                   0, 4, 1, 5, 2, 6, 3, 7};
 
-    create(vertices, indices);
+    m_vertex_array.setData(vertices, indices);
 }
 
 void LinesBatch::draw(const RenderTarget &render_target, const RenderState &render_state) const
@@ -54,7 +55,7 @@ void LinesBatch::draw(const RenderTarget &render_target, const RenderState &rend
     new_render_state.transform *= getTransform();
     new_render_state.shader = DefaultShaders::getLines().get();
     glLineWidth(m_line_width);
-    render_target.draw(m_vertex_buffer, new_render_state, VertexBufferBase::LINES);
+    render_target.draw3D(m_vertex_array, new_render_state, LINES);
 }
 
 } // namespace eb

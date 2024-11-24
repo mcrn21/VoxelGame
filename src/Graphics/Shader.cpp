@@ -166,10 +166,22 @@ void Shader::destroy()
     }
 }
 
-void Shader::uniformMatrix(const std::string &name, glm::mat4 matrix)
+void Shader::uniformMatrix(const std::string &name, const glm::mat4 &matrix)
 {
-    GLuint transform_loc = glGetUniformLocation(m_id, name.c_str());
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, glm::value_ptr(matrix));
+    GLuint loc = glGetUniformLocation(m_id, name.c_str());
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(matrix));
+}
+
+void Shader::uniformVec3(const std::string &name, const glm::vec3 &vec)
+{
+    GLuint loc = glGetUniformLocation(m_id, name.c_str());
+    glUniform3f(loc, vec.x, vec.y, vec.z);
+}
+
+void Shader::uniformFloat(const std::string &name, float value)
+{
+    GLuint loc = glGetUniformLocation(m_id, name.c_str());
+    glUniform1f(loc, value);
 }
 
 void Shader::use(const Shader *shader)

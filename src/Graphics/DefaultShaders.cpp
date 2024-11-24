@@ -1,169 +1,286 @@
 #include "DefaultShaders.h"
 
+#include <spdlog/spdlog.h>
+
+#define GLSL(str) #str
+
 namespace eb {
 
-const std::string DEFAULT_MAIN_VERTEX_SHADER
-    = "#version 330 core\n"
+const std::string DEFAULT_MAIN_VERTEX_SHADER = R"(
+      #version 330 core
 
-      "layout (location = 0) in vec3 v_position;\n"
-      "layout (location = 1) in vec4 v_color;\n"
-      "layout (location = 2) in vec2 v_texCoord;\n"
+      layout (location = 0) in vec3 v_position;
+      layout (location = 1) in vec4 v_color;
+      layout (location = 2) in vec2 v_texCoord;
 
-      "uniform mat4 u_model;\n"
-      "uniform mat4 u_projection;\n"
-      "uniform mat4 u_view;\n"
+      uniform mat4 u_model;
+      uniform mat4 u_projection;
+      uniform mat4 u_view;
 
-      "out vec4 a_color;\n"
-      "out vec2 a_texCoord;\n"
+      out vec4 a_color;
+      out vec2 a_texCoord;
 
-      "void main(){\n"
-      "a_color = v_color;\n"
-      "a_texCoord = v_texCoord;\n"
+      void main(){
+          a_color = v_color;
+          a_texCoord = v_texCoord;
+    
+          gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));
+      }
+)";
 
-      "gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));\n"
-      "}";
+const std::string DEFAULT_MAIN_FRAGMENT_SHADER = R"(
+      #version 330 core
 
-const std::string DEFAULT_MAIN_FRAGMENT_SHADER
-    = "#version 330 core\n"
+      in vec4 a_color;
+      in vec2 a_texCoord;
+      out vec4 f_color;
 
-      "in vec4 a_color;\n"
-      "in vec2 a_texCoord;\n"
-      "out vec4 f_color;\n"
+      uniform sampler2D u_texture0;
 
-      "uniform sampler2D u_texture0;\n"
+      void main(){
+          f_color = a_color * texture(u_texture0, a_texCoord);
+      }
+)";
 
-      "void main(){\n"
-      "    f_color = a_color * texture(u_texture0, a_texCoord);\n"
-      "}";
+const std::string DEFAULT_MAIN_2D_VERTEX_SHADER = R"(
+      #version 330 core
 
-const std::string DEFAULT_MAIN_2D_VERTEX_SHADER
-    = "#version 330 core\n"
+      layout (location = 0) in vec3 v_position;
+      layout (location = 1) in vec4 v_color;
+      layout (location = 2) in vec2 v_texCoord;
 
-      "layout (location = 0) in vec3 v_position;\n"
-      "layout (location = 1) in vec4 v_color;\n"
-      "layout (location = 2) in vec2 v_texCoord;\n"
+      uniform mat4 u_model;
+      uniform mat4 u_projection;
 
-      "uniform mat4 u_model;\n"
-      "uniform mat4 u_projection;\n"
+      out vec4 a_color;
+      out vec2 a_texCoord;
 
-      "out vec4 a_color;\n"
-      "out vec2 a_texCoord;\n"
+      void main(){
+          a_color = v_color;
+          a_texCoord = v_texCoord;
+    
+          gl_Position = u_projection * (u_model * vec4(v_position, 1.0f));
+      }
+)";
 
-      "void main(){\n"
-      "a_color = v_color;\n"
-      "a_texCoord = v_texCoord;\n"
+const std::string DEFAULT_MAIN_2D_FRAGMENT_SHADER = R"(
+      #version 330 core
 
-      "gl_Position = u_projection * (u_model * vec4(v_position, 1.0f));\n"
-      "}";
+      in vec4 a_color;
+      in vec2 a_texCoord;
+      out vec4 f_color;
 
-const std::string DEFAULT_MAIN_2D_FRAGMENT_SHADER
-    = "#version 330 core\n"
+      uniform sampler2D u_texture0;
 
-      "in vec4 a_color;\n"
-      "in vec2 a_texCoord;\n"
-      "out vec4 f_color;\n"
+      void main(){
+          f_color = a_color * texture(u_texture0, a_texCoord);
+      }
+)";
 
-      "uniform sampler2D u_texture0;\n"
+const std::string DEFAULT_VOXELS_VERTEX_SHADER = R"(
+      #version 330 core
 
-      "void main(){\n"
-      "    f_color = a_color * texture(u_texture0, a_texCoord);\n"
-      "}";
+      layout (location = 0) in vec3 v_position;
+      layout (location = 1) in vec2 v_texCoord;
+      layout (location = 2) in vec4 v_light;
 
-const std::string DEFAULT_VOXELS_VERTEX_SHADER
-    = "#version 330 core\n"
+      uniform mat4 u_model;
+      uniform mat4 u_projection;
+      uniform mat4 u_view;
 
-      "layout (location = 0) in vec3 v_position;\n"
-      "layout (location = 1) in vec2 v_texCoord;\n"
-      "layout (location = 2) in vec4 v_light;\n"
+      out vec4 a_color;
+      out vec2 a_texCoord;
 
-      "uniform mat4 u_model;\n"
-      "uniform mat4 u_projection;\n"
-      "uniform mat4 u_view;\n"
+      void main(){
+          a_color = vec4(v_light.r, v_light.g, v_light.b, 1.0f);
+          a_color.rgb += v_light.a;
+          a_texCoord = v_texCoord;
+    
+          gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));
+      }
+)";
 
-      "out vec4 a_color;\n"
-      "out vec2 a_texCoord;\n"
+const std::string DEFAULT_VOXELS_FRAGMENT_SHADER = R"(
+      #version 330 core
 
-      "void main(){\n"
-      "a_color = vec4(v_light.r, v_light.g, v_light.b, 1.0f);\n"
-      "a_color.rgb += v_light.a;\n"
-      "a_texCoord = v_texCoord;\n"
+      in vec4 a_color;
+      in vec2 a_texCoord;
+      out vec4 f_color;
 
-      "gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));\n"
-      "}";
+      uniform sampler2D u_texture0;
 
-const std::string DEFAULT_VOXELS_FRAGMENT_SHADER
-    = "#version 330 core\n"
+      void main(){
+          f_color = a_color * texture(u_texture0, a_texCoord);
+      }
+)";
 
-      "in vec4 a_color;\n"
-      "in vec2 a_texCoord;\n"
-      "out vec4 f_color;\n"
+const std::string DEFAULT_LINES_VERTEX_SHADER = R"(
+      #version 330 core
 
-      "uniform sampler2D u_texture0;\n"
+      layout (location = 0) in vec3 v_position;
+      layout (location = 1) in vec4 v_color;
 
-      "void main(){\n"
-      "    f_color = a_color * texture(u_texture0, a_texCoord);\n"
-      "}";
+      uniform mat4 u_model;
+      uniform mat4 u_projection;
+      uniform mat4 u_view;
 
-const std::string DEFAULT_LINES_VERTEX_SHADER
-    = "#version 330 core\n"
+      out vec4 a_color;
 
-      "layout (location = 0) in vec3 v_position;\n"
-      "layout (location = 1) in vec4 v_color;\n"
+      void main(){
+          a_color = v_color;
+    
+          gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));
+      }
+)";
 
-      "uniform mat4 u_model;\n"
-      "uniform mat4 u_projection;\n"
-      "uniform mat4 u_view;\n"
+const std::string DEFAULT_LINES_FRAGMENT_SHADER = R"(
+      #version 330 core
 
-      "out vec4 a_color;\n"
+      in vec4 a_color;
+      out vec4 f_color;
 
-      "void main(){\n"
-      "a_color = v_color;\n"
+      void main(){
+          f_color = a_color;
+      }
+)";
 
-      "gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));\n"
-      "}";
+const std::string DEFAULT_MESH_VERTEX_SHADER = R"(
+      #version 430 core
 
-const std::string DEFAULT_LINES_FRAGMENT_SHADER = "#version 330 core\n"
+      layout (location = 0) in vec3 v_position;
+      layout (location = 1) in vec3 v_normal;
+      layout (location = 2) in vec2 v_texCoord;
 
-                                                  "in vec4 a_color;\n"
-                                                  "out vec4 f_color;\n"
+      uniform mat4 u_model;
+      uniform mat4 u_projection;
+      uniform mat4 u_view;
 
-                                                  "void main(){\n"
-                                                  "    f_color = a_color;\n"
-                                                  "}";
+      out vec4 a_color;
+      out vec2 a_texCoord;
+      out vec3 a_normal;
+      out vec3 a_fragPos;
 
-const std::string DEFAULT_MESH_VERTEX_SHADER
-    = "#version 330 core\n"
+      void main(){
+          a_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+          a_texCoord = v_texCoord;
+    
+          a_normal = mat3(transpose(inverse(u_model))) * v_normal;
+          a_fragPos = vec3(u_model * vec4(v_position, 1.0f));
+          gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));
+      }
+)";
 
-      "layout (location = 0) in vec3 v_position;\n"
-      "layout (location = 1) in vec3 v_normal;\n"
-      "layout (location = 2) in vec2 v_texCoord;\n"
+const std::string DEFAULT_MESH_FRAGMENT_SHADER = R"(
+      #version 430 core
 
-      "uniform mat4 u_model;\n"
-      "uniform mat4 u_projection;\n"
-      "uniform mat4 u_view;\n"
+      struct Material {
+          vec3 ambient;
+          vec3 diffuse;
+          vec3 specular;    
+          float shininess;
+      }; 
+    
+      struct WorldLight {
+          vec3 direction;
+          vec3 ambient;
+          vec3 diffuse;
+          vec3 specular;
+      };
 
-      "out vec4 a_color;\n"
-      "out vec2 a_texCoord;\n"
+      struct Light
+      {
+          vec3 position;
+          vec3 direction;
+          vec3 ambient;
+          vec3 diffuse;
+          vec3 specular;
+          float constant;
+          float linear;
+          float quadratic;
+          float cutOff;
+          float outerCutOff;
+          bool enable;
+      };
 
-      "void main(){\n"
-      "a_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);\n"
-      "a_texCoord = v_texCoord;\n"
+      layout(std140, binding = 0) buffer Lights
+      {
+          WorldLight world_light;
+          int length;
+          Light lights[];
+      } u_lights;
 
-      "gl_Position = u_projection * u_view * (u_model * vec4(v_position, 1.0f));\n"
-      "}";
+      in vec4 a_color;
+      in vec2 a_texCoord;
+      in vec3 a_normal;
+      in vec3 a_fragPos;
 
-const std::string DEFAULT_MESH_FRAGMENT_SHADER
-    = "#version 330 core\n"
+      out vec4 f_color;
 
-      "in vec4 a_color;\n"
-      "in vec2 a_texCoord;\n"
-      "out vec4 f_color;\n"
+      uniform vec3 u_cameraPos;
+      uniform Material u_material;
+      uniform sampler2D u_texture0;
 
-      "uniform sampler2D u_texture0;\n"
+      vec3 calcWorldLight(WorldLight light, Material material, vec3 normal, vec3 cameraDir)
+      {
+          vec3 lightDir = normalize(-light.direction);
 
-      "void main(){\n"
-      "    f_color = a_color * texture(u_texture0, a_texCoord);\n"
-      "}";
+          float diff = max(dot(normal, lightDir), 0.0);
+
+          vec3 reflectDir = reflect(-lightDir, normal);
+          float spec = pow(max(dot(cameraDir, reflectDir), 0.0), material.shininess);
+
+          vec3 ambient  = light.ambient  * vec3(texture(u_texture0, a_texCoord));
+          vec3 diffuse  = light.diffuse  * diff * vec3(texture(u_texture0, a_texCoord));
+          vec3 specular = light.specular * (spec * material.specular);
+
+          return (ambient + diffuse + specular);
+      }
+
+      vec3 calcLight(Light light, Material material, vec3 normal, vec3 fragPos, vec3 cameraDir)
+      {
+          vec3 lightDir = normalize(light.position - fragPos);
+
+          float diff = max(dot(normal, lightDir), 0.0);
+
+          vec3 reflectDir = reflect(-lightDir, normal);
+          float spec = pow(max(dot(cameraDir, reflectDir), 0.0), material.shininess);
+
+          float distance = length(light.position - fragPos);
+          float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    
+
+          vec3 ambient  = light.ambient  * vec3(texture(u_texture0, a_texCoord));
+          vec3 diffuse  = light.diffuse  * diff * vec3(texture(u_texture0, a_texCoord));
+          vec3 specular = light.specular * spec * (spec * material.specular);
+
+          float intensity = 1.0f;
+          if (light.cutOff != 0 && light.outerCutOff != 0) {
+            float theta = dot(lightDir, normalize(-light.direction)); 
+            float epsilon = light.cutOff - light.outerCutOff;
+            intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+          }  
+          
+          ambient  *= attenuation * intensity;
+          diffuse  *= attenuation * intensity;
+          specular *= attenuation * intensity;
+    
+          return (ambient + diffuse + specular);
+      }
+
+      void main(){
+          vec3 normal = normalize(a_normal);
+          vec3 cameraDir = normalize(u_cameraPos - a_fragPos);
+          vec3 light = vec3(0.0f);
+
+          light += calcWorldLight(u_lights.world_light, u_material, normal, cameraDir);
+
+          for(int i = 0; i < u_lights.length; ++i) {
+               if (u_lights.lights[i].enable == true)
+                  light += calcLight(u_lights.lights[i], u_material, normal, a_fragPos, cameraDir);
+          }
+
+          f_color = (vec4(light, 1.0f) * a_color);// * texture(u_texture0, a_texCoord);
+      }
+)";
 
 std::shared_ptr<Shader> DefaultShaders::getMain()
 {

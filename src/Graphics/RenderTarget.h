@@ -2,8 +2,9 @@
 #define EB_GRAPHICS_RENDERTARGET_H
 
 #include "Camera.h"
+#include "Lights.h"
 #include "RenderState.h"
-#include "VertexBuffer.h"
+#include "VertexArray.h"
 
 #include <glm/glm.hpp>
 
@@ -28,22 +29,26 @@ public:
     std::shared_ptr<Camera> getCamera() const;
     void setCamera(const std::shared_ptr<Camera> &camera);
 
+    std::shared_ptr<Lights> getLights() const;
+    void setLights(const std::shared_ptr<Lights> &lights);
+
     const glm::mat4 &get2DMat() const;
 
     void setClearColor(const glm::vec4 &color);
 
     void draw(const Drawable &drawable) const;
-    void draw(const VertexBufferBase &vertex_buffer,
-              const RenderState &render_state = {},
-              VertexBufferBase::PrimitiveType primitive_type = VertexBufferBase::TRIANGLES) const;
-    void draw2D(const VertexBufferBase &vertex_buffer,
+    void draw3D(const VertexArray &vertex_array,
                 const RenderState &render_state = {},
-                VertexBufferBase::PrimitiveType primitive_type = VertexBufferBase::TRIANGLES) const;
+                PrimitiveType primitive_type = TRIANGLES) const;
+    void draw2D(const VertexArray &vertex_array,
+                const RenderState &render_state = {},
+                PrimitiveType primitive_type = TRIANGLES) const;
 
 private:
     glm::i32vec2 m_size;
     glm::i32vec4 m_viewport;
     std::shared_ptr<Camera> m_camera;
+    std::shared_ptr<Lights> m_lights;
     glm::mat4 m_2d_mat;
 };
 

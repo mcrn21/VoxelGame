@@ -24,8 +24,8 @@ void Mesh::create(const std::vector<MeshVertex> &vertices,
     m_vertices = vertices;
     m_indices = indices;
     m_textures = textures;
-    m_vertex_buffer.create(vertices.size(), indices.size());
-    m_vertex_buffer.update(vertices, indices);
+    m_vertex_array.create<MeshVertex, 3, 3, 2, 3, 3>();
+    m_vertex_array.setData(vertices, indices);
 }
 
 void Mesh::destroy()
@@ -33,7 +33,7 @@ void Mesh::destroy()
     m_vertices.clear();
     m_indices.clear();
     m_textures.clear();
-    m_vertex_buffer.destroy();
+    m_vertex_array.destroy();
 }
 
 void Mesh::draw(const RenderTarget &render_target, const RenderState &render_state) const
@@ -43,7 +43,7 @@ void Mesh::draw(const RenderTarget &render_target, const RenderState &render_sta
     new_render_state.shader = DefaultShaders::getMesh().get();
     if (!m_textures.empty())
         new_render_state.texture = m_textures[0].get();
-    render_target.draw(m_vertex_buffer, new_render_state);
+    render_target.draw3D(m_vertex_array, new_render_state);
 }
 
 } // namespace eb

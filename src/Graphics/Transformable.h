@@ -3,41 +3,44 @@
 
 #include <glm/glm.hpp>
 
+using namespace glm;
+
 namespace eb {
 
 class Transformable
 {
 public:
     Transformable();
-    Transformable(const glm::mat4 &transform);
     virtual ~Transformable() = default;
 
-    const glm::vec3 &getPosition() const;
-    void setPosition(const glm::vec3 &position);
-    void move(const glm::vec3 &vec);
+    const vec3 &getPosition() const;
+    void setPosition(const vec3 &position);
+    void move(const vec3 &vec);
 
-    const glm::vec3 &getRotation() const;
-    void setRotation(const glm::vec3 &rotation);
-    void rotate(const glm::vec3 &vec);
+    const vec3 &getRotation() const;
+    void setRotation(const vec3 &rotation);
+    void rotate(const vec3 &vec);
 
-    const glm::vec3 &getScale() const;
-    void setScale(const glm::vec3 &scale);
-    void scale(const glm::vec3 &vec);
+    const vec3 &getScale() const;
+    void setScale(const vec3 &scale);
+    void scale(const vec3 &vec);
 
-    const glm::vec3 &getOrigin() const;
-    void setOrigin(const glm::vec3 &origin);
+    const vec3 &getOrigin() const;
+    void setOrigin(const vec3 &origin);
 
-    const glm::mat4 &getTransform() const;
-    void setTransform(const glm::mat4 &transform);
+    const mat4 &getTransform() const;
 
 private:
-    glm::vec3 m_position;
-    glm::vec3 m_rotation;
-    glm::vec3 m_scale;
-    glm::vec3 m_origin;
+    void updateTransforms();
+
+private:
+    vec3 m_position;
+    vec3 m_rotation;
+    vec3 m_scale;
+    vec3 m_origin;
 
     mutable bool m_need_update_transform;
-    mutable glm::mat4 m_transform;
+    mat4 m_transform;
 };
 
 } // namespace eb

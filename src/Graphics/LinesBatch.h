@@ -3,11 +3,26 @@
 
 #include "../EngineObject.h"
 #include "Drawable.h"
-#include "LineVertex.h"
 #include "Transformable.h"
-#include "VertexBuffer.h"
+#include "VertexArray.h"
 
 namespace eb {
+
+struct LineVertex
+{
+    LineVertex()
+        : position{0.0f}
+        , color{1.0f}
+    {}
+    LineVertex(glm::vec3 position, glm::vec4 color)
+        : position{position}
+        , color{color}
+    {}
+    ~LineVertex() = default;
+
+    glm::vec3 position;
+    glm::vec4 color;
+};
 
 class LinesBatch : public EngineObject, public Drawable, public Transformable
 {
@@ -25,7 +40,7 @@ public:
 
 private:
     float m_line_width;
-    VertexBuffer<LineVertex, 4> m_vertex_buffer;
+    VertexArray m_vertex_array;
 };
 
 } // namespace eb

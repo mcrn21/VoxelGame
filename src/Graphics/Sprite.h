@@ -6,7 +6,7 @@
 #include "Shader.h"
 #include "Texture.h"
 #include "Transformable.h"
-#include "VertexBuffer.h"
+#include "VertexArray.h"
 
 #include <glm/glm.hpp>
 
@@ -48,7 +48,7 @@ private:
     std::shared_ptr<Texture> m_texture;
     std::shared_ptr<Shader> m_shader;
     glm::i32vec4 m_texture_rect;
-    DefaultVertexBuffer m_vertex_buffer;
+    VertexArray m_vertex_array;
 };
 
 } // namespace eb

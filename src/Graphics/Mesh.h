@@ -4,7 +4,7 @@
 #include "Drawable.h"
 #include "Texture.h"
 #include "Transformable.h"
-#include "VertexBuffer.h"
+#include "VertexArray.h"
 
 #include <memory>
 #include <vector>
@@ -40,7 +40,7 @@ private:
     std::vector<MeshVertex> m_vertices;
     std::vector<uint32_t> m_indices;
     std::vector<std::shared_ptr<Texture>> m_textures;
-    VertexBuffer<MeshVertex, 3, 2, 3, 3> m_vertex_buffer;
+    VertexArray m_vertex_array;
 };
 
 } // namespace eb

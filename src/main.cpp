@@ -5,6 +5,8 @@
 #include <glm/ext.hpp>
 #include <spdlog/spdlog.h>
 
+using namespace glm;
+
 const int32_t WIDTH = 1280;
 const int32_t HEIGHT = 720;
 
@@ -92,7 +94,7 @@ protected:
                                     m_target_sprite->getTextureRect().w / 2,
                                     0.0f});
 
-        window.setClearColor(glm::vec4{0.45f, 0.72f, 1.0f, 1.0f});
+        // window.setClearColor(glm::vec4{0.45f, 0.72f, 1.0f, 1.0f});
 
         m_target_block = std::make_unique<eb::LinesBatch>(this);
         m_target_block->cube({-0.005f, -0.005f, -0.005f},
@@ -174,7 +176,7 @@ protected:
         // Model
         m_test_model = std::make_unique<eb::Model>();
         m_test_model->loadFromFile("model/airpods_girl/scene.gltf");
-        m_test_model->setScale({1.1f, 1.1f, 1.1f});
+        // m_test_model->setScale({1.1f, 1.1f, 1.1f});
         m_test_model->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
         m_test_model->setPosition({0.0f, 20.0f, 0.0f});
 
@@ -187,6 +189,41 @@ protected:
         m_test_model2->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
         m_test_model2->setPosition({40.0f, 40.0f, 0.0f});
 
+        window.getLights()->setWorldLightAmbient({0.5f, 0.5f, 0.5f});
+        window.getLights()->setWorldLightDiffuse({0.0f, 0.5f, 0.5f});
+        window.getLights()->setWorldLightDirection({-2.0f, -5.0f, -2.0f});
+
+        // window.getLights()->setWorldLightAmbient({0.0f, 0.0f, 0.0f});
+        // window.getLights()->setWorldLightDiffuse({0.0f, 0.0f, 0.0f});
+        // window.getLights()->setWorldLightDirection({0.0f, 0.0f, 0.0f});
+
+        m_point_light = window.getLights()->createLight();
+        m_point_light.setPosition({20.0f, 20.0f, 20.0f});
+        m_point_light.setAmbient({1.0f, 1.0f, 1.0f});
+        m_point_light.setDiffuse({1.0f, 1.0f, 1.0f});
+        m_point_light.setSpecular({1.0f, 1.0f, 1.0f});
+        m_point_light.setConstant(1.0f);
+        m_point_light.setLinear(0.022f);
+        m_point_light.setQuadratic(0.0019f);
+        m_point_light.setEnable(true);
+
+        m_light = window.getLights()->createLight();
+        m_light.setPosition({1.0f, 0.0f, 1.0f});
+        m_light.setAmbient({1.0f, 1.0f, 1.0f});
+        m_light.setDiffuse({1.0f, 1.0f, 1.0f});
+        m_light.setSpecular({1.0f, 1.0f, 1.0f});
+        m_light.setConstant(1.0f);
+        m_light.setLinear(0.022f);
+        m_light.setQuadratic(0.0019f);
+
+        m_light.setCutOff(0.9978f);
+        m_light.setOuterCutOff(0.953f);
+
+        // m_light.setCutOff(0.0);
+        // m_light.setOuterCutOff(0.0);
+
+        m_light.setEnable(true);
+
         spdlog::info("OK");
     }
 
@@ -196,6 +233,23 @@ protected:
         auto &mouse = getMouse();
         auto &window = getWindow();
         auto camera = window.getCamera(); //getCamera();
+
+        // rotate light
+        // auto direct_light = window.getDirectLight();
+        // auto &world_light = window.getLights().getWorldLight();
+        // static eb::Time sum_e;
+        // sum_e += elapsed;
+
+        // auto dir = world_light.getDirection();
+        // dir.y = sin(sum_e.asSeconds()) * 20;
+
+        // world_light.setDirection(dir);
+
+        // spdlog::debug("{}", direct_light->direction.y);
+
+        // if (keyboard.isKeyJustPressed(GLFW_KEY_2)) {
+        //     m_point_light.setEnable(!m_point_light.isEnable());
+        // }
 
         if (keyboard.isKeyJustPressed(GLFW_KEY_ESCAPE))
             window.setShouldClose(true);
@@ -238,6 +292,10 @@ protected:
 
         if (keyboard.isKeyPressed(GLFW_KEY_D))
             camera->move(m_camera_right * elapsed.asSeconds() * m_camera_speed);
+
+        m_light.setPosition(camera->getPosition());
+        m_light.setDirection(camera->getFront());
+        // m_point_light.setPosition(camera->getPosition());
 
         // ray cast
         {
@@ -405,6 +463,9 @@ private:
     std::unique_ptr<eb::Model> m_test_model;
 
     std::unique_ptr<eb::Model> m_test_model2;
+
+    eb::Light m_point_light;
+    eb::Light m_light;
 };
 
 int main()

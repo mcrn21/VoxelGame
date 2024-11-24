@@ -104,7 +104,7 @@ void Window::setMouseEnable(bool enable)
 
 Window::Window(Engine *engine)
     : EngineObject{engine}
-    , RenderTarget()
+    , RenderTarget{}
     , m_window{nullptr}
     , m_mouse_enable{true}
 {}

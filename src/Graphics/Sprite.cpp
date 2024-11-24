@@ -1,6 +1,7 @@
 #include "Sprite.h"
 #include "DefaultShaders.h"
 #include "Shader.h"
+#include "Vertex.h"
 
 namespace eb {
 
@@ -11,7 +12,9 @@ Sprite::Sprite(Engine *engine)
     , m_draw_type{DRAW_3D}
     , m_texture{nullptr}
     , m_shader{DefaultShaders::getMain()}
-{}
+{
+    m_vertex_array.create<Vertex, 3, 4, 2>();
+}
 
 Sprite::Sprite(Engine *engine,
                const std::shared_ptr<Texture> &texture,
@@ -22,6 +25,7 @@ Sprite::Sprite(Engine *engine,
     , m_draw_type{DRAW_3D}
     , m_shader{DefaultShaders::getMain()}
 {
+    m_vertex_array.create<Vertex, 3, 4, 2>();
     setTexture(texture, texture_rect);
 }
 
@@ -84,17 +88,15 @@ void Sprite::draw(const RenderTarget &render_target, const RenderState &render_s
     new_render_state.shader = m_shader.get();
     new_render_state.texture = m_texture.get();
     if (m_draw_type == DRAW_3D)
-        render_target.draw(m_vertex_buffer, new_render_state);
+        render_target.draw3D(m_vertex_array, new_render_state);
     else
-        render_target.draw2D(m_vertex_buffer, new_render_state);
+        render_target.draw2D(m_vertex_array, new_render_state);
 }
 
 void Sprite::updateVertices()
 {
-    if (m_texture == nullptr) {
-        m_vertex_buffer.destroy();
+    if (m_texture == nullptr)
         return;
-    }
 
     glm::vec4 uv = m_texture->getUVRect(m_texture_rect);
 
@@ -105,8 +107,7 @@ void Sprite::updateVertices()
 
     static const std::vector<uint32_t> indices = {0, 1, 3, 1, 2, 3};
 
-    m_vertex_buffer.create(vertices.size(), indices.size());
-    m_vertex_buffer.update(vertices, indices);
+    m_vertex_array.setData(vertices, indices);
 }
 
 } // namespace eb

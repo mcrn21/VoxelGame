@@ -5,7 +5,7 @@
 #include "Drawable.h"
 #include "Texture.h"
 #include "Transformable.h"
-#include "VertexBuffer.h"
+#include "VertexArray.h"
 
 #include <memory>
 
@@ -116,7 +116,7 @@ private:
 
 private:
     std::shared_ptr<Texture> m_texture;
-    VertexBuffer<VoxelVertex, 2, 4> m_vertex_buffer;
+    VertexArray m_vertex_array;
 };
 
 } // namespace eb

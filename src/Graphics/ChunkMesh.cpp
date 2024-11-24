@@ -97,14 +97,16 @@ ChunkMesh::ChunkMesh(Engine *engine)
     : EngineObject{engine}
     , Drawable{}
     , Transformable{}
-{}
+{
+    m_vertex_array.create<VoxelVertex, 3, 2, 4>();
+}
 
 ChunkMesh::ChunkMesh(Engine *engine, const std::shared_ptr<Texture> &texture)
     : EngineObject{engine}
     , Drawable{}
     , Transformable{}
-    , m_vertex_buffer{VertexBufferBase::DYNAMIC}
 {
+    m_vertex_array.create<VoxelVertex, 3, 2, 4>();
     setTexture(texture);
 }
 
@@ -120,8 +122,6 @@ void ChunkMesh::setTexture(const std::shared_ptr<Texture> &texture)
 
 void ChunkMesh::create(Chunks *chunks, const glm::i32vec3 &chunk_coords)
 {
-    m_vertex_buffer.destroy();
-
     float voxel_size = chunks->getVoxelSize();
     float texture_size = chunks->getTextureSize();
 
@@ -180,8 +180,7 @@ void ChunkMesh::create(Chunks *chunks, const glm::i32vec3 &chunk_coords)
             }
         });
 
-    m_vertex_buffer.create(vertices.size(), indices.size());
-    m_vertex_buffer.update(vertices, indices);
+    m_vertex_array.setData(vertices, indices);
 }
 
 void ChunkMesh::draw(const RenderTarget &render_target, const RenderState &render_state) const
@@ -190,7 +189,7 @@ void ChunkMesh::draw(const RenderTarget &render_target, const RenderState &rende
     new_render_state.transform *= getTransform();
     new_render_state.shader = DefaultShaders::getVoxels().get();
     new_render_state.texture = m_texture.get();
-    render_target.draw(m_vertex_buffer, new_render_state);
+    render_target.draw3D(m_vertex_array, new_render_state);
 }
 
 void ChunkMesh::createUpSide(std::vector<VoxelVertex> &vertices,

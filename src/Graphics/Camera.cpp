@@ -76,6 +76,12 @@ void Camera::rotate(const glm::vec3 &rotation)
 
 const glm::vec3 &Camera::getFront() const
 {
+    if (m_need_update & VIEW) {
+        m_need_update = m_need_update & ~VIEW;
+        m_front = glm::vec3(getRotationMat() * glm::vec4(0, 0, -1, 1));
+        m_view_mat = glm::lookAt(m_position, m_position + m_front, m_up);
+    }
+
     return m_front;
 }
 
