@@ -2,6 +2,7 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <spdlog/spdlog.h>
 
 #include <assert.h>
 
@@ -9,9 +10,8 @@ namespace eb {
 
 Engine *Engine::m_engine = nullptr;
 
-Engine::Engine()
+Engine::Engine(const i32vec2 &window_size, const std::string &window_title)
     : m_window{this}
-    , m_window_resized{false}
     , m_keyboard{this}
     , m_mouse{this}
     , m_running{false}
@@ -21,10 +21,20 @@ Engine::Engine()
     assert(m_engine == nullptr);
     m_engine = this;
     initGraphics();
+
+    m_window.setSizeCallback(std::bind(&Engine::onWindowResize, this, std::placeholders::_1));
+
+    m_window.create(window_size, window_title);
+
+    if (m_window.get()) {
+        m_scene_3d = std::make_shared<Scene3D>();
+        m_scene_2d = std::make_shared<Scene2D>();
+    }
 }
 
 Engine::~Engine()
 {
+    m_window.destroy();
     terminateGraphics();
 }
 
@@ -66,7 +76,13 @@ void Engine::setTickTime(const Time &tick_time)
 
 void Engine::mainLoop()
 {
+    if (!m_window.get()) {
+        spdlog::warn("No window");
+        return;
+    }
+
     onInit();
+    onWindowResize(m_window.getSize());
 
     if (m_exited)
         return;
@@ -79,12 +95,6 @@ void Engine::mainLoop()
         lag += (m_loop_elapsed_time = m_loop_clock.restart());
 
         m_window.pollEvents();
-
-        if (m_window_resized) {
-            m_window_resized = false;
-            onWindowResize(m_window.getSize().x, m_window.getSize().y);
-        }
-
         onProcessInput(m_loop_elapsed_time);
 
         while (lag >= m_tick_time) {
@@ -92,11 +102,9 @@ void Engine::mainLoop()
             lag -= m_tick_time;
         }
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        m_window.clear();
         onDraw(m_loop_elapsed_time);
-
-        m_window.swapBuffers();
+        m_window.display();
     }
 
     m_running = false;
@@ -108,15 +116,53 @@ void Engine::exit()
     m_exited = true;
 }
 
+Assets &Engine::getAssets()
+{
+    return m_assets;
+}
+
+std::shared_ptr<Scene3D> Engine::getScene3D() const
+{
+    return m_scene_3d;
+}
+
+void Engine::setScene3D(const std::shared_ptr<Scene3D> &scene)
+{
+    if (!scene)
+        return;
+    m_scene_3d = scene;
+}
+
+std::shared_ptr<Scene2D> Engine::getScene2D() const
+{
+    return m_scene_2d;
+}
+
+void Engine::setScene2D(const std::shared_ptr<Scene2D> &scene)
+{
+    m_scene_2d = scene;
+}
+
 void Engine::onInit() {}
 
-void Engine::onWindowResize(int32_t width, int32_t height) {}
+void Engine::onWindowResize(const i32vec2 &window_size)
+{
+    m_window.setViewport({0, 0, window_size.x, window_size.y});
+    m_scene_3d->updateProjectionMatrix(window_size);
+    m_scene_2d->updateProjectionMatrix(window_size);
+}
 
 void Engine::onProcessInput(const Time &elapsed) {}
 
-void Engine::onTick(const Time &elapsed) {}
+void Engine::onTick(const Time &elapsed)
+{
+    m_scene_3d->update(elapsed);
+}
 
-void Engine::onDraw(const Time &elapsed) {}
+void Engine::onDraw(const Time &elapsed)
+{
+    m_scene_3d->draw(elapsed, m_window);
+}
 
 void Engine::onFinish() {}
 

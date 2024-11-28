@@ -5,18 +5,24 @@
 #include <glm/ext.hpp>
 #include <spdlog/spdlog.h>
 
+#include <entt/entt.hpp>
+#include <reactphysics3d/reactphysics3d.h>
+
 using namespace glm;
 
 const int32_t WIDTH = 1280;
 const int32_t HEIGHT = 720;
 
+// TextureLoader(Assets *assets)::loadFromFile
+
+// MeshInstance
+// ModelInstance
+
 class EngineImpl : public eb::Engine
 {
 public:
     EngineImpl()
-        : m_camera_cam_x{0.0f}
-        , m_camera_cam_y{0.0f}
-        , m_camera_speed{20.0f}
+        : eb::Engine{{WIDTH, HEIGHT}, "Voxel game"}
         , m_target_block_visible{false}
     {}
     ~EngineImpl() = default;
@@ -24,83 +30,98 @@ public:
     bool init() { return true; }
 
 protected:
-    void onWindowResize(int32_t width, int32_t height)
+    void onWindowResize(const i32vec2 &window_size)
     {
-        getWindow().setViewport({0, 0, width, height});
-        getWindow().getCamera()->setRatio(static_cast<float>(width) / height);
+        Engine::onWindowResize(window_size);
 
         m_target_sprite->setPosition(
-            {static_cast<float>(width) / 2, static_cast<float>(height) / 2, 0});
+            {static_cast<float>(window_size.x) / 2, static_cast<float>(window_size.y) / 2, 0});
     }
 
     void onInit()
     {
         auto &window = getWindow();
-        auto camera = window.getCamera(); //getCamera();
 
-        window.create(WIDTH, HEIGHT, "Voxel game");
+        // === Load assets ===
+        // Textures
+        getAssets().loadFromFile<eb::Texture>({}, "test.png");
+        getAssets().loadFromFile<eb::Texture>({}, "54.png");
+        getAssets().loadFromFile<eb::Texture>({}, "atlas.png");
+        getAssets().loadFromFile<eb::Texture>({}, "target.png");
 
-        m_texture1 = std::make_shared<eb::Texture>();
-        if (!m_texture1->loadFromFile("test.png")) {
-            spdlog::error("Error loading texture");
-            exit();
-        }
+        // Models
+        getAssets().loadFromFile<eb::Model>(
+            "level", "model/dave_mirra_freestyle_bmx_level_acclaim_dirt_v2/scene.gltf");
+        getAssets().loadFromFile<eb::Model>("girl", "model/airpods_girl/scene.gltf");
+        getAssets().loadFromFile<eb::Model>("shrek",
+                                            "model/girl_cyborg_character_1121194628_refine_fbx/"
+                                            "girl_cyborg_character_1121194628_refine.fbx");
+        getAssets().loadFromFile<eb::Model>("11", "model/11/11.glb");
 
-        m_texture2 = std::make_shared<eb::Texture>();
-        if (!m_texture2->loadFromFile("54.png")) {
-            spdlog::error("Error loading texture");
-            exit();
-        }
+        // ===================
 
-        m_sprite1 = std::make_unique<eb::Sprite>(this);
-        m_sprite1->setTexture(m_texture1, glm::vec4{180.0f, 0.0f, 180.0f, 150.0f});
-        m_sprite1->setOrigin(
-            glm::vec3{m_sprite1->getTextureRect().z / 2, m_sprite1->getTextureRect().w / 2, 0.0f});
-        m_sprite1->rotate(glm::vec3{glm::radians(0.0f), glm::radians(0.0f), glm::radians(45.0f)});
+        // === Camera ===
+        m_scene_camera.camera = getScene3D()->getCamera();
+        m_scene_camera.camera->move(glm::vec3{0.0f, 0.0f, 100.0f});
+        m_scene_camera.front = glm::vec3(m_scene_camera.camera->getRotationMat()
+                                         * glm::vec4(0, 0, -1, 1));
+        m_scene_camera.right = glm::vec3(m_scene_camera.camera->getRotationMat()
+                                         * glm::vec4(1, 0, 0, 1));
 
-        m_sprite2 = std::make_unique<eb::Sprite>(this);
-        m_sprite2->setTexture(m_texture2);
-        m_sprite2->move(glm::vec3{200.0f, 0.0f, 0.0f});
-        m_sprite2->setOrigin(
-            glm::vec3{m_sprite2->getTextureRect().z / 2, m_sprite2->getTextureRect().w / 2, 0.0f});
+        // === Sprites ===
 
-        camera->move(glm::vec3{0.0f, 0.0f, 100.0f});
-        m_camera_front = glm::vec3(camera->getRotationMat() * glm::vec4(0, 0, -1, 1));
-        m_camera_right = glm::vec3(camera->getRotationMat() * glm::vec4(1, 0, 0, 1));
+        m_sptite_entity_1 = getScene3D()->getRegistry().create();
 
-        m_atlas = std::make_shared<eb::Texture>();
-        if (!m_atlas->loadFromFile("atlas.png")) {
-            spdlog::error("Error loading texture");
-            exit();
-        }
+        auto sprite1 = std::make_shared<eb::Sprite3D>();
+        sprite1->setMaterial({getAssets().get<eb::Texture>("test")},
+                             glm::vec4{180.0f, 0.0f, 180.0f, 150.0f});
+        sprite1->setOrigin(
+            glm::vec3{sprite1->getTextureRect().z / 2, sprite1->getTextureRect().w / 2, 0.0f});
+        sprite1->rotate(glm::vec3{glm::radians(0.0f), glm::radians(0.0f), glm::radians(45.0f)});
+
+        getScene3D()->getRegistry().emplace<eb::DrawableComponent>(m_sptite_entity_1, sprite1);
+
+        m_sptite_entity_2 = getScene3D()->getRegistry().create();
+
+        auto sprite2 = std::make_shared<eb::Sprite3D>();
+        sprite2->setMaterial({getAssets().get<eb::Texture>("54")});
+        sprite2->move(glm::vec3{200.0f, 0.0f, 0.0f});
+        sprite2->setOrigin(
+            glm::vec3{sprite2->getTextureRect().z / 2, sprite2->getTextureRect().w / 2, 0.0f});
+
+        getScene3D()->getRegistry().emplace<eb::DrawableComponent>(m_sptite_entity_2, sprite2);
+
+        // ===============
 
         m_chunks = std::make_unique<eb::Chunks>(glm::i32vec3{4, 1, 4},
                                                 glm::i32vec3{16, 32, 16},
                                                 1.0f,
                                                 16.0f,
-                                                m_atlas,
+                                                getAssets().get<eb::Texture>("atlas"),
                                                 this);
 
-        m_target_texture = std::make_shared<eb::Texture>();
-        if (!m_target_texture->loadFromFile("target.png")) {
-            spdlog::error("Error loading texture");
-            exit();
-        }
+        // === Target block ==
 
-        m_target_sprite = std::make_unique<eb::Sprite>(this);
-        m_target_sprite->setTexture(m_target_texture);
-        m_target_sprite->setDrawType(eb::Sprite::DRAW_2D);
+        m_target_sprite = std::make_unique<eb::Sprite2D>();
+        m_target_sprite->setTexture(getAssets().get<eb::Texture>("target"));
         m_target_sprite->setOrigin({m_target_sprite->getTextureRect().z / 2,
                                     m_target_sprite->getTextureRect().w / 2,
                                     0.0f});
 
         // window.setClearColor(glm::vec4{0.45f, 0.72f, 1.0f, 1.0f});
 
-        m_target_block = std::make_unique<eb::LinesBatch>(this);
-        m_target_block->cube({-0.005f, -0.005f, -0.005f},
-                             {1.005f, 1.005f, 1.005f},
-                             glm::vec4{0.0f, 0.0f, 0.0f, 0.7f});
-        m_target_block->setLineWidth(3.0f);
+        m_target_entity = getScene3D()->getRegistry().create();
+        auto target_lines_batch = std::make_shared<eb::LinesBatch>();
+        target_lines_batch->cube({-0.005f, -0.005f, -0.005f},
+                                 {1.005f, 1.005f, 1.005f},
+                                 glm::vec4{0.0f, 0.0f, 0.0f, 0.7f});
+        target_lines_batch->setLineWidth(3.0f);
+
+        auto &target_dc = getScene3D()->getRegistry().emplace<eb::DrawableComponent>(
+            m_target_entity);
+        target_dc.drawable = target_lines_batch;
+
+        // ====================
 
         // Light
         m_r_solver = std::make_unique<eb::LightSolver>(m_chunks.get(), 0);
@@ -162,42 +183,24 @@ protected:
         m_b_solver->solve();
         m_s_solver->solve();
 
-        std::vector<eb::MeshVertex> mesh_verticies = {{{0, 0, 0}},
-                                                      {{10, 0, 0}},
-                                                      {{10, 10, 0}},
-                                                      {{0, 10, 0}}};
+        // === Models ===
+        createModelEntity(m_test_entity, "11", {0.0f, 20.0f, 0.0f});
+        createModelEntity(m_test_entity_2,
+                          "shrek",
+                          {40.0f, 40.0f, 0.0f},
+                          vec3{0.0f},
+                          {0.3f, 0.3f, 0.3f});
 
-        std::vector<uint32_t> mesh_indices = {0, 1, 3, 1, 2, 3};
+        createModelEntity(m_level_entity, "level", vec3{0.0f}, vec3{0.0f}, {100.3f, 100.3f, 100.3f});
 
-        m_test_mesh = std::make_unique<eb::Mesh>(mesh_verticies,
-                                                 mesh_indices,
-                                                 std::vector<std::shared_ptr<eb::Texture>>{});
+        // ==============
 
-        // Model
-        m_test_model = std::make_unique<eb::Model>();
-        m_test_model->loadFromFile("model/airpods_girl/scene.gltf");
-        // m_test_model->setScale({1.1f, 1.1f, 1.1f});
-        m_test_model->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
-        m_test_model->setPosition({0.0f, 20.0f, 0.0f});
+        // === Lights ===
+        getScene3D()->getLights()->setWorldLightAmbient({0.5f, 0.5f, 0.5f});
+        getScene3D()->getLights()->setWorldLightDiffuse({0.0f, 0.5f, 0.5f});
+        getScene3D()->getLights()->setWorldLightDirection({-2.0f, -5.0f, -2.0f});
 
-        m_test_model2 = std::make_unique<eb::Model>();
-
-        m_test_model2->loadFromFile(
-            "model/volumen-pequeno-final-daniela-romar-taz/source/Shrek Final.fbx");
-
-        m_test_model2->setScale({10.3f, 10.3f, 10.3f});
-        m_test_model2->setRotation({glm::radians(-90.0f), 0.0f, 0.0f});
-        m_test_model2->setPosition({40.0f, 40.0f, 0.0f});
-
-        window.getLights()->setWorldLightAmbient({0.5f, 0.5f, 0.5f});
-        window.getLights()->setWorldLightDiffuse({0.0f, 0.5f, 0.5f});
-        window.getLights()->setWorldLightDirection({-2.0f, -5.0f, -2.0f});
-
-        // window.getLights()->setWorldLightAmbient({0.0f, 0.0f, 0.0f});
-        // window.getLights()->setWorldLightDiffuse({0.0f, 0.0f, 0.0f});
-        // window.getLights()->setWorldLightDirection({0.0f, 0.0f, 0.0f});
-
-        m_point_light = window.getLights()->createLight();
+        m_point_light = getScene3D()->getLights()->createLight();
         m_point_light.setPosition({20.0f, 20.0f, 20.0f});
         m_point_light.setAmbient({1.0f, 1.0f, 1.0f});
         m_point_light.setDiffuse({1.0f, 1.0f, 1.0f});
@@ -205,9 +208,8 @@ protected:
         m_point_light.setConstant(1.0f);
         m_point_light.setLinear(0.022f);
         m_point_light.setQuadratic(0.0019f);
-        m_point_light.setEnable(true);
 
-        m_light = window.getLights()->createLight();
+        m_light = getScene3D()->getLights()->createLight();
         m_light.setPosition({1.0f, 0.0f, 1.0f});
         m_light.setAmbient({1.0f, 1.0f, 1.0f});
         m_light.setDiffuse({1.0f, 1.0f, 1.0f});
@@ -219,10 +221,46 @@ protected:
         m_light.setCutOff(0.9978f);
         m_light.setOuterCutOff(0.953f);
 
-        // m_light.setCutOff(0.0);
-        // m_light.setOuterCutOff(0.0);
+        // ==============
 
-        m_light.setEnable(true);
+        // === Physics ===
+        createCubeEntity(m_static_block,
+                         getAssets().get<eb::Texture>("test"),
+                         {0, 0, 0},
+                         {20, 10, 20});
+        createCubeEntity(m_dynamic_block,
+                         getAssets().get<eb::Texture>("test"),
+                         {0, 0, 0},
+                         {5, 5, 5});
+
+        reactphysics3d::PhysicsWorld::WorldSettings settings;
+        settings.defaultVelocitySolverNbIterations = 20;
+        settings.isSleepingEnabled = false;
+        settings.gravity = reactphysics3d::Vector3(0, -9.81, 0);
+
+        m_world = m_physics_common.createPhysicsWorld(settings);
+
+        reactphysics3d::Vector3 position(0.0, 0.0, 0.0);
+        reactphysics3d::Quaternion orientation = reactphysics3d::Quaternion::identity();
+        reactphysics3d::Transform transform(position, orientation);
+
+        m_body_1 = m_world->createRigidBody(transform);
+        m_body_1->setType(reactphysics3d::BodyType::STATIC);
+
+        reactphysics3d::Vector3 position2(5.0, 50.0, 5.0);
+        reactphysics3d::Quaternion orientation2 = reactphysics3d::Quaternion::identity();
+        reactphysics3d::Transform transform2(position2, orientation2);
+        m_body_2 = m_world->createRigidBody(transform2);
+
+        const reactphysics3d::Vector3 halfExtents(10.0, 5.0, 10.0);
+        reactphysics3d::BoxShape *boxShape1 = m_physics_common.createBoxShape(halfExtents);
+        reactphysics3d::Collider *collider;
+        collider = m_body_1->addCollider(boxShape1, reactphysics3d::Transform::identity());
+
+        const reactphysics3d::Vector3 halfExtents2(2.5, 2.5, 2.5);
+        reactphysics3d::BoxShape *boxShape2 = m_physics_common.createBoxShape(halfExtents2);
+        reactphysics3d::Collider *collider2;
+        collider2 = m_body_2->addCollider(boxShape2, reactphysics3d::Transform::identity());
 
         spdlog::info("OK");
     }
@@ -232,7 +270,6 @@ protected:
         auto &keyboard = getKeyboard();
         auto &mouse = getMouse();
         auto &window = getWindow();
-        auto camera = window.getCamera(); //getCamera();
 
         // rotate light
         // auto direct_light = window.getDirectLight();
@@ -254,48 +291,53 @@ protected:
         if (keyboard.isKeyJustPressed(GLFW_KEY_ESCAPE))
             window.setShouldClose(true);
 
-        if (keyboard.isKeyJustPressed(GLFW_KEY_1)) {
-            auto &window = getWindow();
-            window.destroy();
-            window.create(WIDTH, HEIGHT, "Voxel game");
-        }
-
-        // window.setClearColor(glm::vec4{0.8f, 0.4f, 0.2f, 1.0f});
         if (keyboard.isKeyJustPressed(GLFW_KEY_TAB))
             window.setMouseEnable(!window.isMouseEnable());
 
+        // === Camera ===
+
         if (!window.isMouseEnable()) {
-            m_camera_cam_y += -static_cast<float>(mouse.getDeltaY()) / window.getSize().x * 1.5f;
-            m_camera_cam_x += -static_cast<float>(mouse.getDeltaX()) / window.getSize().y * 1.5f;
+            m_scene_camera.dir_y += -static_cast<float>(mouse.getDeltaY()) / window.getSize().x
+                                    * 1.5f;
+            m_scene_camera.dir_x += -static_cast<float>(mouse.getDeltaX()) / window.getSize().y
+                                    * 1.5f;
 
-            if (m_camera_cam_y < -glm::radians(89.0f))
-                m_camera_cam_y = -glm::radians(89.0f);
+            if (m_scene_camera.dir_y < -glm::radians(89.0f))
+                m_scene_camera.dir_y = -glm::radians(89.0f);
 
-            if (m_camera_cam_y > glm::radians(89.0f)) {
-                m_camera_cam_y = glm::radians(89.0f);
+            if (m_scene_camera.dir_y > glm::radians(89.0f)) {
+                m_scene_camera.dir_y = glm::radians(89.0f);
             }
 
-            camera->setRotation(glm::vec3{m_camera_cam_y, m_camera_cam_x, 0.0f});
+            m_scene_camera.camera->setRotation(
+                glm::vec3{m_scene_camera.dir_y, m_scene_camera.dir_x, 0.0f});
 
-            m_camera_front = glm::vec3(camera->getRotationMat() * glm::vec4(0, 0, -1, 1));
-            m_camera_right = glm::vec3(camera->getRotationMat() * glm::vec4(1, 0, 0, 1));
+            m_scene_camera.front = glm::vec3(m_scene_camera.camera->getRotationMat()
+                                             * glm::vec4(0, 0, -1, 1));
+            m_scene_camera.right = glm::vec3(m_scene_camera.camera->getRotationMat()
+                                             * glm::vec4(1, 0, 0, 1));
         }
 
         if (keyboard.isKeyPressed(GLFW_KEY_W))
-            camera->move(m_camera_front * elapsed.asSeconds() * m_camera_speed);
+            m_scene_camera.camera->move(m_scene_camera.front * elapsed.asSeconds()
+                                        * m_scene_camera.speed);
 
         if (keyboard.isKeyPressed(GLFW_KEY_S))
-            camera->move(-m_camera_front * elapsed.asSeconds() * m_camera_speed);
+            m_scene_camera.camera->move(-m_scene_camera.front * elapsed.asSeconds()
+                                        * m_scene_camera.speed);
 
         if (keyboard.isKeyPressed(GLFW_KEY_A))
-            camera->move(-m_camera_right * elapsed.asSeconds() * m_camera_speed);
+            m_scene_camera.camera->move(-m_scene_camera.right * elapsed.asSeconds()
+                                        * m_scene_camera.speed);
 
         if (keyboard.isKeyPressed(GLFW_KEY_D))
-            camera->move(m_camera_right * elapsed.asSeconds() * m_camera_speed);
+            m_scene_camera.camera->move(m_scene_camera.right * elapsed.asSeconds()
+                                        * m_scene_camera.speed);
 
-        m_light.setPosition(camera->getPosition());
-        m_light.setDirection(camera->getFront());
-        // m_point_light.setPosition(camera->getPosition());
+        // ==============
+
+        m_light.setPosition(m_scene_camera.camera->getPosition());
+        m_light.setDirection(m_scene_camera.camera->getFront());
 
         // ray cast
         {
@@ -304,8 +346,8 @@ protected:
             glm::vec3 end;
             glm::vec3 norm;
             glm::vec3 iend;
-            const eb::Voxel *voxel = m_chunks->rayCast(camera->getPosition(),
-                                                       camera->getFront(),
+            const eb::Voxel *voxel = m_chunks->rayCast(m_scene_camera.camera->getPosition(),
+                                                       m_scene_camera.camera->getFront(),
                                                        10.0f,
                                                        end,
                                                        norm,
@@ -313,7 +355,9 @@ protected:
 
             if (voxel) {
                 m_target_block_visible = true;
-                m_target_block->setPosition(iend);
+                auto &target_dc = getScene3D()->getRegistry().get<eb::DrawableComponent>(
+                    m_target_entity);
+                target_dc.drawable->setPosition(iend);
 
                 if (mouse.isButtonJustPressed(GLFW_MOUSE_BUTTON_1)) {
                     m_chunks->setVoxelByGlobal(iend, eb::Voxel{0});
@@ -402,56 +446,102 @@ protected:
         auto &keyboard = getKeyboard();
         auto &mouse = getMouse();
 
-        m_sprite2->rotate(glm::vec3{glm::radians(0.0f),
-                                    glm::radians(0.0f),
-                                    glm::radians(elapsed.asSeconds() * 20)});
+        auto &sprite_entity_2_dc = getScene3D()->getRegistry().get<eb::DrawableComponent>(
+            m_sptite_entity_2);
+
+        sprite_entity_2_dc.drawable->rotate(glm::vec3{glm::radians(0.0f),
+                                                      glm::radians(0.0f),
+                                                      glm::radians(elapsed.asSeconds() * 20)});
 
         m_chunks->update();
+
+        m_world->update(elapsed.asSeconds());
+
+        const reactphysics3d::Transform &transform = m_body_1->getTransform();
+        const reactphysics3d::Vector3 &position = transform.getPosition();
+
+        auto &static_dc = getScene3D()->getRegistry().get<eb::DrawableComponent>(m_static_block);
+        static_dc.drawable->setPosition({position.x, position.y, position.z});
+
+        const reactphysics3d::Transform &transform2 = m_body_2->getTransform();
+        const reactphysics3d::Vector3 &position2 = transform2.getPosition();
+
+        const quat glm_quat(transform2.getOrientation().w,
+                            transform2.getOrientation().x,
+                            transform2.getOrientation().y,
+                            transform2.getOrientation().z);
+        const vec3 euler = glm::eulerAngles(glm_quat);
+
+        auto &dynamic_dc = getScene3D()->getRegistry().get<eb::DrawableComponent>(m_dynamic_block);
+        dynamic_dc.drawable->setPosition({position2.x, position2.y, position2.z});
+        dynamic_dc.drawable->setRotation({euler.x, euler.y, euler.z});
     }
 
     void onDraw(const eb::Time &elapsed)
     {
-        // getWindow().draw(*m_sprite1);
-        getWindow().draw(*m_sprite2);
+        eb::Engine::onDraw(elapsed);
 
-        // for (const auto &mesh : m_chunks_mesh) {
-        //     getWindow().draw(*mesh);
-        // }
+        getScene2D()->draw(*m_target_sprite);
 
-        m_chunks->draw(getWindow());
-
-        if (m_target_block_visible)
-            getWindow().draw(*m_target_block);
-
-        // getWindow().draw(*m_test_mesh);
-        getWindow().draw(*m_test_model);
-        getWindow().draw(*m_test_model2);
-
-        getWindow().draw(*m_target_sprite);
-
-        // getWindow().draw(m_chunk_mesh);
+        // m_chunks->draw(getWindow());
     }
 
 private:
-    std::shared_ptr<eb::Texture> m_texture1;
-    std::shared_ptr<eb::Texture> m_texture2;
+    void createModelEntity(entt::entity &entity,
+                           const std::string &model_name,
+                           const vec3 &position = vec3{0.0f},
+                           const vec3 &rotation = vec3{0.0f},
+                           const vec3 &scale = vec3{1.0f})
+    {
+        auto &registry = getScene3D()->getRegistry();
 
-    std::unique_ptr<eb::Sprite> m_sprite1;
-    std::unique_ptr<eb::Sprite> m_sprite2;
+        entity = registry.create();
+        auto &drawable_comp = registry.emplace<eb::DrawableComponent>(entity);
 
-    glm::vec3 m_camera_front;
-    glm::vec3 m_camera_right;
-    float m_camera_cam_x;
-    float m_camera_cam_y;
-    float m_camera_speed;
+        auto model = std::make_shared<eb::ModelInstance>(getAssets().get<eb::Model>(model_name));
+        model->setPosition(position);
+        model->setRotation(rotation);
+        model->setScale(scale);
+        drawable_comp.drawable = model;
+    }
 
-    std::shared_ptr<eb::Texture> m_atlas;
+    void createCubeEntity(entt::entity &entity,
+                          const std::shared_ptr<eb::Texture> &texture,
+                          const vec3 &from,
+                          const vec3 &to)
+    {
+        auto &registry = getScene3D()->getRegistry();
+
+        entity = registry.create();
+        auto &drawable_comp = registry.emplace<eb::DrawableComponent>(entity);
+
+        auto shape = std::make_shared<eb::Shape3D>();
+        shape->setMaterial({texture});
+        shape->createCube(from, to);
+        shape->setOrigin((to - from) / 2.0f);
+        drawable_comp.drawable = shape;
+    }
+
+private:
+    entt::entity m_sptite_entity_1;
+    entt::entity m_sptite_entity_2;
+
+    struct SceneCamera
+    {
+        std::shared_ptr<eb::Camera> camera;
+        glm::vec3 front;
+        glm::vec3 right;
+        float dir_x{0.0f};
+        float dir_y{0.0f};
+        float speed{20.0f};
+    } m_scene_camera;
+
     std::unique_ptr<eb::Chunks> m_chunks;
 
-    std::shared_ptr<eb::Texture> m_target_texture;
-    std::unique_ptr<eb::Sprite> m_target_sprite;
+    std::unique_ptr<eb::Sprite2D> m_target_sprite;
 
-    std::unique_ptr<eb::LinesBatch> m_target_block;
+    // std::unique_ptr<eb::LinesBatch> m_target_block;
+    entt::entity m_target_entity;
     bool m_target_block_visible;
 
     std::unique_ptr<eb::LightSolver> m_r_solver;
@@ -459,13 +549,20 @@ private:
     std::unique_ptr<eb::LightSolver> m_b_solver;
     std::unique_ptr<eb::LightSolver> m_s_solver;
 
-    std::unique_ptr<eb::Mesh> m_test_mesh;
-    std::unique_ptr<eb::Model> m_test_model;
-
-    std::unique_ptr<eb::Model> m_test_model2;
+    entt::entity m_test_entity;
+    entt::entity m_test_entity_2;
+    entt::entity m_level_entity;
 
     eb::Light m_point_light;
     eb::Light m_light;
+
+    entt::entity m_static_block;
+    entt::entity m_dynamic_block;
+
+    reactphysics3d::PhysicsCommon m_physics_common;
+    reactphysics3d::PhysicsWorld *m_world;
+    reactphysics3d::RigidBody *m_body_1;
+    reactphysics3d::RigidBody *m_body_2;
 };
 
 int main()

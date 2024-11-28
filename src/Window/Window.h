@@ -2,9 +2,14 @@
 #define EB_WINDOW_WINDOW_H
 
 #include "../EngineObject.h"
-#include "../Graphics/RenderTarget.h"
+#include "../Graphics/Common/RenderTarget.h"
 
+#include <glm/glm.hpp>
+
+#include <functional>
 #include <string>
+
+using namespace glm;
 
 class GLFWwindow;
 
@@ -17,7 +22,7 @@ class Window : public EngineObject, public RenderTarget
     friend class Engine;
 
 public:
-    bool create(int32_t width, int32_t height, const std::string &title);
+    bool create(const i32vec2 &window_size, const std::string &window_title);
     void destroy();
 
     GLFWwindow *get() const;
@@ -25,15 +30,19 @@ public:
     bool isShouldClose() const;
     void setShouldClose(bool flag);
 
-    void swapBuffers();
     void pollEvents();
 
     bool isMouseEnable() const;
     void setMouseEnable(bool enable);
 
+    void setSizeCallback(const std::function<void(const i32vec2 &)> &callback);
+
+    void clear(const vec4 &color = vec4{0.0f}) const;
+    void display() const;
+
 protected:
     Window(Engine *engine);
-    ~Window() = default;
+    ~Window();
 
 private:
     static void sizeCallback(GLFWwindow *window, int32_t width, int32_t height);
@@ -48,6 +57,7 @@ private:
 private:
     GLFWwindow *m_window;
     bool m_mouse_enable;
+    std::function<void(const i32vec2 &)> m_size_callback;
 };
 
 } // namespace eb

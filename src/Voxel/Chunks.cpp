@@ -1,4 +1,5 @@
 #include "Chunks.h"
+#include "../Graphics/Common/RenderTarget.h"
 
 #include <glm/gtc/noise.hpp>
 #include <spdlog/spdlog.h>
@@ -351,8 +352,8 @@ void Chunks::update()
 
 void Chunks::draw(const RenderTarget &render_target) const
 {
-    for (const auto &chunk_state : m_chunk_states)
-        render_target.draw(*chunk_state->mesh);
+    // for (const auto &chunk_state : m_chunk_states)
+    //     render_target.draw(*chunk_state->mesh);
 }
 
 int32_t Chunks::chunkCoordsToIndex(const glm::i32vec3 &chunk_coords) const

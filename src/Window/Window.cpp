@@ -1,6 +1,5 @@
 #include "Window.h"
 #include "../Engine.h"
-#include "../Graphics/Drawable.h"
 #include "Keyboard.h"
 #include "Mouse.h"
 
@@ -11,14 +10,14 @@
 
 namespace eb {
 
-bool Window::create(int32_t width, int32_t height, const std::string &title)
+bool Window::create(const i32vec2 &window_size, const std::string &window_title)
 {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
-    m_window = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+    m_window = glfwCreateWindow(window_size.x, window_size.y, window_title.c_str(), nullptr, nullptr);
 
     if (m_window == nullptr) {
         spdlog::error("Failed to create GLFW Window");
@@ -41,8 +40,7 @@ bool Window::create(int32_t width, int32_t height, const std::string &title)
 
     glfwSetWindowUserPointer(m_window, this);
 
-    setSize({width, height});
-    getEngine()->m_window_resized = true;
+    setSize(window_size);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -54,8 +52,10 @@ bool Window::create(int32_t width, int32_t height, const std::string &title)
 
 void Window::destroy()
 {
-    glfwDestroyWindow(m_window);
-    m_window = nullptr;
+    if (m_window) {
+        glfwDestroyWindow(m_window);
+        m_window = nullptr;
+    }
 }
 
 GLFWwindow *Window::get() const
@@ -65,20 +65,16 @@ GLFWwindow *Window::get() const
 
 bool Window::isShouldClose() const
 {
-    assert(m_window != nullptr);
+    if (!m_window)
+        return false;
     return glfwWindowShouldClose(m_window);
 }
 
 void Window::setShouldClose(bool flag)
 {
-    assert(m_window != nullptr);
+    if (!m_window)
+        return;
     glfwSetWindowShouldClose(m_window, flag);
-}
-
-void Window::swapBuffers()
-{
-    assert(m_window != nullptr);
-    glfwSwapBuffers(m_window);
 }
 
 void Window::pollEvents()
@@ -95,11 +91,30 @@ bool Window::isMouseEnable() const
 
 void Window::setMouseEnable(bool enable)
 {
-    assert(m_window != nullptr);
+    if (!m_window)
+        return;
+
     m_mouse_enable = !m_mouse_enable;
     glfwSetInputMode(m_window,
                      GLFW_CURSOR,
                      m_mouse_enable ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+}
+
+void Window::setSizeCallback(const std::function<void(const i32vec2 &)> &callback)
+{
+    m_size_callback = callback;
+}
+
+void Window::clear(const vec4 &color) const
+{
+    if (m_window)
+        RenderTarget::clear(color);
+}
+
+void Window::display() const
+{
+    if (m_window)
+        glfwSwapBuffers(m_window);
 }
 
 Window::Window(Engine *engine)
@@ -109,11 +124,16 @@ Window::Window(Engine *engine)
     , m_mouse_enable{true}
 {}
 
+Window::~Window()
+{
+    destroy();
+}
+
 void Window::sizeCallback(GLFWwindow *window, int32_t width, int32_t height)
 {
     Window *w = static_cast<Window *>(glfwGetWindowUserPointer(window));
     w->setSize({width, height});
-    w->getEngine()->m_window_resized = true;
+    w->m_size_callback({width, height});
 }
 
 void Window::mousePositionCallback(GLFWwindow *glfw_window, double xpos, double ypos)

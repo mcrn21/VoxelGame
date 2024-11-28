@@ -2,8 +2,9 @@
 #define EB_VOXEL_CHUNKS_H
 
 #include "../EngineObject.h"
-#include "../Graphics/ChunkMesh.h"
-#include "../Graphics/Texture.h"
+#include "../Graphics/3D/ChunkMesh.h"
+#include "../Graphics/Common/RenderTarget.h"
+#include "../Graphics/Common/Texture.h"
 #include "Chunk.h"
 
 #include <memory>
