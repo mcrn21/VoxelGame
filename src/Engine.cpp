@@ -27,7 +27,7 @@ Engine::Engine(const i32vec2 &window_size, const std::string &window_title)
     m_window.create(window_size, window_title);
 
     if (m_window.get()) {
-        m_scene_3d = std::make_shared<Scene3D>();
+        m_scene_3d = std::make_shared<Scene3D>(this);
         m_scene_2d = std::make_shared<Scene2D>();
     }
 }
@@ -152,11 +152,14 @@ void Engine::onWindowResize(const i32vec2 &window_size)
     m_scene_2d->updateProjectionMatrix(window_size);
 }
 
-void Engine::onProcessInput(const Time &elapsed) {}
+void Engine::onProcessInput(const Time &elapsed)
+{
+    m_scene_3d->update(elapsed);
+}
 
 void Engine::onTick(const Time &elapsed)
 {
-    m_scene_3d->update(elapsed);
+    m_scene_3d->updateTick(elapsed);
 }
 
 void Engine::onDraw(const Time &elapsed)

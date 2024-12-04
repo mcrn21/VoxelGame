@@ -1,7 +1,7 @@
 #ifndef EB_GRAPHICS_VERTEXARRAY_H
 #define EB_GRAPHICS_VERTEXARRAY_H
 
-#include "GlBuffer.h"
+#include "GLBuffer.h"
 
 #include <spdlog/spdlog.h>
 
@@ -33,8 +33,8 @@ public:
 
         glBindVertexArray(m_vao);
 
-        GlBuffer::bind(m_vbo);
-        GlBuffer::bind(m_ebo);
+        GLBuffer::bind(m_vbo);
+        GLBuffer::bind(m_ebo);
 
         std::array<int32_t, sizeof...(Is)> attrs = {Is...};
         int32_t byte_offset = 0;
@@ -49,9 +49,9 @@ public:
             byte_offset += attrs[i];
         }
 
-        GlBuffer::unbind(m_vbo);
+        GLBuffer::unbind(m_vbo);
         glBindVertexArray(0);
-        GlBuffer::unbind(m_ebo);
+        GLBuffer::unbind(m_ebo);
 
         m_vertex_count = 0;
         m_indices_count = 0;
@@ -77,8 +77,8 @@ public:
 
 private:
     UsageType m_usage_type;
-    GlBuffer m_vbo;
-    GlBuffer m_ebo;
+    GLBuffer m_vbo;
+    GLBuffer m_ebo;
     uint32_t m_vao;
     int32_t m_vertex_count;
     int32_t m_indices_count;

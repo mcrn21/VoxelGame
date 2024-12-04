@@ -3,7 +3,7 @@
 
 #include "../../Utils/IdStorage.h"
 #include "../../Utils/SparseSet.h"
-#include "../Common/GlBuffer.h"
+#include "../Common/GLBuffer.h"
 
 #include <glm/glm.hpp>
 
@@ -62,7 +62,7 @@ public:
     void destroyLight(const Id &id);
     bool isLightValid(const Id &id) const;
 
-    const GlBuffer &getLightsSSBO() const;
+    const GLBuffer &getLightsSSBO() const;
 
 private:
     WorldLightData m_world_light;
@@ -72,7 +72,7 @@ private:
     SparseSet<Id, LightData> m_lights;
     mutable bool m_lights_count_changed;
     mutable std::set<Id> m_lights_updated;
-    mutable GlBuffer m_lights_ssbo;
+    mutable GLBuffer m_lights_ssbo;
 };
 
 class Light

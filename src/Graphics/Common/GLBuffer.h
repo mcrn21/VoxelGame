@@ -7,11 +7,11 @@
 
 namespace eb {
 
-class GlBuffer
+class GLBuffer
 {
 public:
-    GlBuffer(BufferType type, UsageType usage_type = DYNAMIC);
-    ~GlBuffer();
+    GLBuffer(BufferType type, UsageType usage_type = DYNAMIC);
+    ~GLBuffer();
 
     BufferType getType() const;
     UsageType getUsageType() const;
@@ -40,9 +40,9 @@ public:
         glBindBuffer(m_type, 0);
     }
 
-    static void bind(const GlBuffer &gl_buffer);
-    static void bindToShader(const GlBuffer &gl_buffer, int32_t index);
-    static void unbind(const GlBuffer &gl_buffer);
+    static void bind(const GLBuffer &gl_buffer);
+    static void bindToShader(const GLBuffer &gl_buffer, int32_t index);
+    static void unbind(const GLBuffer &gl_buffer);
     static void unbind(BufferType type);
 
 private:

@@ -4,12 +4,18 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 
+#include <filesystem>
+
 using namespace glm;
 
 namespace eb {
 
+class DepthRenderTexture;
+
 class Texture
 {
+    friend class DepthRenderTexture;
+
 public:
     enum Format {
         LUMINANCE = GL_LUMINANCE,
@@ -23,11 +29,14 @@ public:
     Texture(uint32_t id, const i32vec2 &size);
     ~Texture();
 
+    bool loadFromFile(const std::filesystem::path &path);
+    bool loadFromData(const uint8_t *data, int32_t size);
+
+    uint32_t getId() const;
     i32vec2 getSize() const;
     vec4 getUVRect(const i32vec4 &sub_rect) const;
 
     void create(const i32vec2 &size, Format format, const uint8_t *data);
-
     bool isValid() const;
     void destroy();
 

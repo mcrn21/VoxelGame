@@ -1,7 +1,10 @@
 #include "Texture.h"
 
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../3rd/stb_image.h"
+
 #include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
 namespace eb {
@@ -21,6 +24,74 @@ Texture::Texture(uint32_t id, const i32vec2 &size)
 Texture::~Texture()
 {
     destroy();
+}
+
+bool Texture::loadFromFile(const std::filesystem::path &path)
+{
+    if (path.empty())
+        return false;
+
+    int32_t width = 0;
+    int32_t height = 0;
+    int32_t nr_components = 0;
+
+    uint8_t *image_data = stbi_load(path.c_str(), &width, &height, &nr_components, 0);
+
+    if (!image_data)
+        return false;
+
+    Format format;
+    if (nr_components == 1)
+        format = LUMINANCE;
+    else if (nr_components == 2)
+        format = LUMINANCE_ALPHA;
+    else if (nr_components == 3)
+        format = RGB;
+    else if (nr_components == 4)
+        format = RGBA;
+
+    create({width, height}, format, image_data);
+
+    stbi_image_free(image_data);
+
+    return true;
+}
+
+bool Texture::loadFromData(const uint8_t *data, int32_t size)
+{
+    if (data == nullptr || size <= 0)
+        return false;
+
+    uint8_t *image_data = nullptr;
+    int32_t width = 0;
+    int32_t height = 0;
+    int32_t nr_components = 0;
+
+    image_data = stbi_load_from_memory(data, size, &width, &height, &nr_components, 0);
+
+    if (!image_data)
+        return false;
+
+    Format format;
+    if (nr_components == 1)
+        format = LUMINANCE;
+    else if (nr_components == 2)
+        format = LUMINANCE_ALPHA;
+    else if (nr_components == 3)
+        format = RGB;
+    else if (nr_components == 4)
+        format = RGBA;
+
+    create({width, height}, format, image_data);
+
+    stbi_image_free(image_data);
+
+    return true;
+}
+
+uint32_t Texture::getId() const
+{
+    return m_id;
 }
 
 i32vec2 Texture::getSize() const

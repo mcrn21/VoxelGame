@@ -89,7 +89,7 @@ bool Lights::isLightValid(const Id &id) const
     return m_lights_id_storage.isValid(id);
 }
 
-const GlBuffer &Lights::getLightsSSBO() const
+const GLBuffer &Lights::getLightsSSBO() const
 {
     if (m_lights_count_changed) {
         int32_t lights_size = m_lights.getSize();

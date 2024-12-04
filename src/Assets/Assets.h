@@ -27,8 +27,14 @@ public:
     template<typename T>
     void remove(const std::string &asset_name);
 
+    template<typename T>
+    bool has(const std::string &asset_name);
+
     template<typename T, typename... Args>
     std::shared_ptr<T> loadFromFile(const std::string &asset_name, Args &&...args);
+
+    template<typename T, typename... Args>
+    std::shared_ptr<T> loadFromData(const std::string &asset_name, Args &&...args);
 
 private:
     std::unordered_map<std::type_index, assets_map> m_assets;
@@ -69,10 +75,30 @@ inline void Assets::remove(const std::string &asset_name)
         assets_found->second.erase(asset_found);
 }
 
+template<typename T>
+inline bool Assets::has(const std::string &asset_name)
+{
+    auto assets_found = m_assets.find(typeid(T));
+    if (assets_found == m_assets.end())
+        return false;
+
+    auto asset_found = assets_found->second.find(asset_name);
+    if (asset_found == assets_found->second.end())
+        return false;
+
+    return true;
+}
+
 template<typename T, typename... Args>
 inline std::shared_ptr<T> Assets::loadFromFile(const std::string &asset_name, Args &&...args)
 {
     return AssetLoader<T>::loadFromFile(this, asset_name, std::forward<Args>(args)...);
+}
+
+template<typename T, typename... Args>
+inline std::shared_ptr<T> Assets::loadFromData(const std::string &asset_name, Args &&...args)
+{
+    return AssetLoader<T>::loadFromData(this, asset_name, std::forward<Args>(args)...);
 }
 
 } // namespace eb

@@ -1,8 +1,8 @@
-#include "GlBuffer.h"
+#include "GLBuffer.h"
 
 namespace eb {
 
-GlBuffer::GlBuffer(BufferType type, UsageType usage_type)
+GLBuffer::GLBuffer(BufferType type, UsageType usage_type)
     : m_type{type}
     , m_usage_type{usage_type}
     , m_id{0}
@@ -10,37 +10,37 @@ GlBuffer::GlBuffer(BufferType type, UsageType usage_type)
     , m_size{0}
 {}
 
-GlBuffer::~GlBuffer()
+GLBuffer::~GLBuffer()
 {
     destroy();
 }
 
-BufferType GlBuffer::getType() const
+BufferType GLBuffer::getType() const
 {
     return m_type;
 }
 
-UsageType GlBuffer::getUsageType() const
+UsageType GLBuffer::getUsageType() const
 {
     return m_usage_type;
 }
 
-uint32_t GlBuffer::getId() const
+uint32_t GLBuffer::getId() const
 {
     return m_id;
 }
 
-bool GlBuffer::isValid() const
+bool GLBuffer::isValid() const
 {
     return m_valid;
 }
 
-int32_t GlBuffer::getSize() const
+int32_t GLBuffer::getSize() const
 {
     return m_size;
 }
 
-void GlBuffer::create(int32_t size)
+void GLBuffer::create(int32_t size)
 {
     destroy();
 
@@ -53,7 +53,7 @@ void GlBuffer::create(int32_t size)
     m_size = size;
 }
 
-void GlBuffer::destroy()
+void GLBuffer::destroy()
 {
     if (!m_valid)
         return;
@@ -65,28 +65,28 @@ void GlBuffer::destroy()
     m_size = 0;
 }
 
-void GlBuffer::bind(const GlBuffer &gl_buffer)
+void GLBuffer::bind(const GLBuffer &gl_buffer)
 {
     if (!gl_buffer.m_valid)
         return;
     glBindBuffer(gl_buffer.m_type, gl_buffer.m_id);
 }
 
-void GlBuffer::bindToShader(const GlBuffer &gl_buffer, int32_t index)
+void GLBuffer::bindToShader(const GLBuffer &gl_buffer, int32_t index)
 {
     if (!gl_buffer.m_valid)
         return;
     glBindBufferBase(gl_buffer.m_type, index, gl_buffer.m_id);
 }
 
-void GlBuffer::unbind(const GlBuffer &gl_buffer)
+void GLBuffer::unbind(const GLBuffer &gl_buffer)
 {
     if (!gl_buffer.m_valid)
         return;
     glBindBuffer(gl_buffer.m_type, 0);
 }
 
-void GlBuffer::unbind(BufferType type)
+void GLBuffer::unbind(BufferType type)
 {
     glBindBuffer(type, 0);
 }

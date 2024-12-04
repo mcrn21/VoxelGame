@@ -16,6 +16,12 @@ public:
     {
         return nullptr;
     }
+
+    template<typename... Args>
+    static std::shared_ptr<T> loadFromData(Assets *, const std::string &, Args &&...args)
+    {
+        return nullptr;
+    }
 };
 
 } // namespace eb

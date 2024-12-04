@@ -12,6 +12,7 @@ public:
     ~Shape3D() = default;
 
     void createCube(const vec3 &from, const vec3 &to);
+    void createPlane(const vec3 &p1, const vec3 &p2, const vec3 &p3, const vec3 &p4);
 };
 
 } // namespace eb
